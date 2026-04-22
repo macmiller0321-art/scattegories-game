@@ -11,7 +11,13 @@ const io = new Server(server, {
   cors: { origin: '*' },
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  },
+}));
 
 const ANIMALS = [
   { name: 'Fox',       emoji: '🦊' },
