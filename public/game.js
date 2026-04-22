@@ -143,8 +143,8 @@ function connectSocket() {
     state.allVotes   = data.votes || {};
     if (data.players) state.players = data.players;
 
-    renderVoting(data);
     showView('voting');
+    try { renderVoting(data); } catch(e) { console.error('renderVoting error:', e); }
     startVoteTimer(data.voteTime);
   });
 
@@ -161,8 +161,8 @@ function connectSocket() {
     state.allAnswers   = data.answers;
     state.players      = data.players;
 
-    renderResults(data);
     showView('results');
+    try { renderResults(data); } catch(e) { console.error('renderResults error:', e); }
   });
 
   // ── Game over ──────────────────────────────────────────────
@@ -526,7 +526,7 @@ function buildResultsCards(categories, answers, answerStatus) {
 /* ─────────────────────────────────────────────────────────────
    Results view
 ───────────────────────────────────────────────────────────── */
-function renderResults({ pointsThisRound, answerStatus, answers, letter, categories, players, currentRound, totalRounds }) {
+function renderResults({ pointsThisRound, answerStatus, answers, letter, categories, players, currentRound, totalRounds, isLastRound }) {
   state.answerStatus = answerStatus;
   state.allAnswers   = answers;
   state.players      = players;

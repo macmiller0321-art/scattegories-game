@@ -355,10 +355,17 @@ io.on('connection', (socket) => {
       total: connectedCount,
     });
 
-    // Only trigger early-end if all players voluntarily submitted mid-round
-    if (room.state === 'playing' && room.round.submitted.size >= connectedCount) {
-      clearInterval(room.timers.round);
-      endRound(room);
+    // Trigger early-end when every connected player has submitted
+    const allSubmitted = room.round.submitted.size >= connectedCount;
+    if (allSubmitted) {
+      if (room.state === 'playing') {
+        clearInterval(room.timers.round);
+        endRound(room);
+      } else if (room.state === 'collecting') {
+        clearTimeout(room.timers.collect);
+        delete room.timers.collect;
+        endRound(room);
+      }
     }
   });
 
@@ -437,10 +444,11 @@ io.on('connection', (socket) => {
 
     io.to(code).emit('room-updated', publicRoom(room));
 
-    if (room.state === 'playing' && room.round) {
+    if (room.round && ['playing', 'collecting'].includes(room.state)) {
       const connectedCount = room.players.filter(p => p.connected).length;
       if (room.round.submitted.size >= connectedCount) {
-        clearInterval(room.timers.round);
+        if (room.state === 'playing') clearInterval(room.timers.round);
+        if (room.state === 'collecting') clearTimeout(room.timers.collect);
         endRound(room);
       }
     }
