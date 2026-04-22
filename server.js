@@ -49,10 +49,20 @@ function generateRoomCode() {
   return code;
 }
 
-function pickLetter(usedLetters) {
-  const available = LETTERS.filter(l => !usedLetters.includes(l));
-  const pool = available.length > 0 ? available : [...LETTERS];
-  return pool[Math.floor(Math.random() * pool.length)];
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function pickLetter(room) {
+  if (!room.letterPool || room.letterPool.length === 0) {
+    room.letterPool = shuffleArray(LETTERS);
+  }
+  return room.letterPool.shift();
 }
 
 function assignAnimal(room) {
@@ -136,7 +146,7 @@ function startRound(room) {
   clearTimers(room);
   room.currentRound++;
 
-  const letter = pickLetter(room.usedLetters);
+  const letter = pickLetter(room);
   room.usedLetters.push(letter);
 
   room.round = {
@@ -276,6 +286,7 @@ io.on('connection', (socket) => {
       categories: [...DEFAULT_CATEGORIES],
       currentRound: 0,
       usedLetters: [],
+      letterPool: shuffleArray(LETTERS),
       round: null,
       timers: {},
     };
@@ -410,6 +421,7 @@ io.on('connection', (socket) => {
     for (const p of room.players) p.score = 0;
     room.currentRound = 0;
     room.usedLetters = [];
+    room.letterPool = shuffleArray(LETTERS);
     room.round = null;
     room.categories = [...DEFAULT_CATEGORIES];
     room.state = 'lobby';
