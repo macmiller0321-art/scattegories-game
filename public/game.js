@@ -108,6 +108,30 @@ function connectSocket() {
 
   state.socket.on('timer', ({ timeLeft }) => updateTimer(timeLeft, state.timerMax));
 
+  // ── Collect answers (server timer just hit 0) ──────────────
+  // Flush whatever the player has typed, whether or not they hit Submit Early.
+  state.socket.on('collect-answers', () => {
+    clearInterval(_clientTimerInterval);
+    updateTimer(0, state.timerMax);
+
+    // Read any values that haven't been synced to state yet
+    document.querySelectorAll('.category-input').forEach(input => {
+      const val = input.value.trim();
+      if (val) state.answers[input.dataset.category] = val;
+      input.disabled = true;
+    });
+
+    if (!state.submitted) {
+      state.submitted = true;
+      document.getElementById('playing-form').style.display = 'none';
+      document.getElementById('playing-submitted').style.display = 'block';
+      document.getElementById('submission-waiting').textContent = "Time's up! Locking in answers…";
+    }
+
+    // Always re-send so the server has the latest values
+    state.socket.emit('submit-answers', { answers: state.answers });
+  });
+
   state.socket.on('submission-update', ({ count, total }) => {
     const el = document.getElementById('submission-waiting');
     if (el) el.innerHTML = `Waiting for other players… <strong>${count}/${total}</strong> submitted`;
@@ -250,10 +274,10 @@ function renderScoreboardStrip(containerId) {
 /* ─────────────────────────────────────────────────────────────
    Playing view
 ───────────────────────────────────────────────────────────── */
-function renderPlaying({ round, letter, categories, timeLimit }) {
+function renderPlaying({ round, totalRounds, letter, categories, timeLimit }) {
   state.timerMax = timeLimit;
 
-  document.getElementById('playing-round-label').textContent = `Round ${round}`;
+  document.getElementById('playing-round-label').textContent = `Round ${round} of ${totalRounds}`;
   const badge = document.getElementById('playing-letter-badge');
   badge.textContent = letter;
   badge.className   = `letter-badge ${letterColorClass(round)}`;
@@ -469,12 +493,12 @@ function statusLabel(status, ptLabel) {
 /* ─────────────────────────────────────────────────────────────
    Results view
 ───────────────────────────────────────────────────────────── */
-function renderResults({ pointsThisRound, answerStatus, answers, letter, categories, players }) {
+function renderResults({ pointsThisRound, answerStatus, answers, letter, categories, players, currentRound, totalRounds }) {
   state.answerStatus = answerStatus;
   state.allAnswers   = answers;
   state.players      = players;
 
-  document.getElementById('results-heading').textContent = `Round ${state.roundInfo?.round ?? ''} Complete!`;
+  document.getElementById('results-heading').textContent = `Round ${currentRound} of ${totalRounds} Complete!`;
   document.getElementById('results-letter').textContent  = letter;
 
   // Scoreboard
@@ -620,11 +644,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Results — Next round
   document.getElementById('btn-next-round').addEventListener('click', () => {
     state.socket.emit('next-round');
-  });
-
-  // Results — End game
-  document.getElementById('btn-end-game').addEventListener('click', () => {
-    state.socket.emit('end-game');
   });
 
   // Game over — Play again

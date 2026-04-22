@@ -34,7 +34,9 @@ const DEFAULT_CATEGORIES = [
 // A–Z excluding Q, U, X, Y, Z
 const LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','R','S','T','V','W'];
 const ROUND_TIME = 75;
-const VOTE_TIME = 40;
+const VOTE_TIME  = 40;
+const MAX_ROUNDS = 3;
+const COLLECT_MS = 1500; // grace period after timer to flush typed answers
 
 const rooms = new Map();
 
@@ -163,6 +165,7 @@ function startRound(room) {
       room.state = 'playing';
       io.to(room.code).emit('round-start', {
         round: room.currentRound,
+        totalRounds: MAX_ROUNDS,
         letter,
         categories: room.round.categories,
         timeLimit: ROUND_TIME,
@@ -181,13 +184,17 @@ function startRoundTimer(room) {
     if (room.round.timeLeft <= 0) {
       clearInterval(room.timers.round);
       delete room.timers.round;
-      endRound(room);
+      // Collecting phase: tell clients to flush whatever they've typed,
+      // then wait briefly before locking in answers for voting.
+      room.state = 'collecting';
+      io.to(room.code).emit('collect-answers');
+      room.timers.collect = setTimeout(() => endRound(room), COLLECT_MS);
     }
   }, 1000);
 }
 
 function endRound(room) {
-  if (room.state !== 'playing') return;
+  if (room.state !== 'playing' && room.state !== 'collecting') return;
   clearTimers(room);
 
   room.state = 'voting';
@@ -223,6 +230,11 @@ function finalizeVoting(room) {
     p.score += pointsThisRound[p.id] || 0;
   }
 
+  if (room.currentRound >= MAX_ROUNDS) {
+    endGame(room);
+    return;
+  }
+
   room.state = 'results';
   io.to(room.code).emit('round-results', {
     pointsThisRound,
@@ -231,6 +243,8 @@ function finalizeVoting(room) {
     letter: room.round.letter,
     categories: room.round.categories,
     players: room.players.map(p => ({ id: p.id, name: p.name, animal: p.animal, score: p.score })),
+    currentRound: room.currentRound,
+    totalRounds: MAX_ROUNDS,
   });
 }
 
@@ -329,7 +343,7 @@ io.on('connection', (socket) => {
 
   socket.on('submit-answers', ({ answers }) => {
     const room = rooms.get(socket.roomCode);
-    if (!room || room.state !== 'playing') return;
+    if (!room || (room.state !== 'playing' && room.state !== 'collecting')) return;
 
     room.round.answers[socket.id] = answers;
     room.round.submitted.add(socket.id);
@@ -340,7 +354,8 @@ io.on('connection', (socket) => {
       total: connectedCount,
     });
 
-    if (room.round.submitted.size >= connectedCount) {
+    // Only trigger early-end if all players voluntarily submitted mid-round
+    if (room.state === 'playing' && room.round.submitted.size >= connectedCount) {
       clearInterval(room.timers.round);
       endRound(room);
     }
@@ -373,12 +388,6 @@ io.on('connection', (socket) => {
     const room = rooms.get(socket.roomCode);
     if (!room || room.host !== socket.id || room.state !== 'results') return;
     startRound(room);
-  });
-
-  socket.on('end-game', () => {
-    const room = rooms.get(socket.roomCode);
-    if (!room || room.host !== socket.id || room.state !== 'results') return;
-    endGame(room);
   });
 
   socket.on('play-again', () => {
