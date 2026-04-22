@@ -1,42 +1,60 @@
-/* ── State ──────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   State
+───────────────────────────────────────────────────────────── */
 const state = {
   socket: null,
   playerId: null,
   roomCode: null,
   playerName: null,
+  myAnimal: null,
+
+  // Current room snapshot
   players: [],
   host: null,
-  settings: { rounds: 3, timeLimit: 120 },
-  currentRound: 0,
-  roundInfo: null,  // { round, totalRounds, letter, categories, timeLimit }
-  timerMax: 120,
-  answers: {},      // my current answers keyed by category
+  categories: [],
+
+  // Gameplay
+  roundInfo: null,   // { round, letter, categories, timeLimit }
+  timerMax: 75,
+  answers: {},       // my answers: { [category]: string }
   submitted: false,
-  allAnswers: {},   // { [playerId]: { [category]: answer } } during review/results
-  allDisputes: {},  // { [playerId]: { [category]: [disputerIds] } }
-  answerStatus: {}, // { [playerId]: { [category]: 'valid'|'duplicate'|... } }
-  reviewTimerMax: 45,
+
+  // Voting
+  allAnswers: {},    // { [playerId]: { [category]: string } }
+  allVotes: {},      // { [targetPid]: { [category]: [rejectorId, …] } }
+  voteTimerMax: 40,
+
+  // Results
+  answerStatus: {},  // { [playerId]: { [category]: status-string } }
 };
 
-/* ── Socket setup ───────────────────────────────────────────── */
+const DEFAULT_CATEGORIES = [
+  'Animals', 'Countries', 'Foods & Drinks', 'Movies', 'Famous People',
+  'Cities', 'Things in a Kitchen', 'Clothing & Accessories', 'Occupations / Jobs', 'Sports',
+];
+
+/* ─────────────────────────────────────────────────────────────
+   Socket
+───────────────────────────────────────────────────────────── */
 function connectSocket() {
   state.socket = io({ transports: ['websocket', 'polling'] });
 
-  state.socket.on('room-created', ({ roomCode, playerId }) => {
+  state.socket.on('room-created', ({ roomCode, playerId, animal }) => {
     state.roomCode = roomCode;
     state.playerId = playerId;
+    state.myAnimal = animal;
   });
 
-  state.socket.on('room-joined', ({ roomCode, playerId }) => {
+  state.socket.on('room-joined', ({ roomCode, playerId, animal }) => {
     state.roomCode = roomCode;
     state.playerId = playerId;
+    state.myAnimal = animal;
   });
 
   state.socket.on('room-updated', (room) => {
-    state.players = room.players;
-    state.host = room.host;
-    state.settings = room.settings;
-    state.currentRound = room.currentRound;
+    state.players  = room.players;
+    state.host     = room.host;
+    state.categories = room.categories;
 
     if (room.state === 'lobby') {
       showView('lobby');
@@ -44,161 +62,212 @@ function connectSocket() {
     }
   });
 
-  state.socket.on('join-error', ({ message }) => {
-    showToast(message, true);
-  });
+  state.socket.on('join-error', ({ message }) => showToast(message, true));
+  state.socket.on('player-left', ({ name, animal }) =>
+    showToast(`${animal?.emoji ?? ''} ${name} left.`));
+  state.socket.on('host-changed', ({ name, animal }) =>
+    showToast(`${animal?.emoji ?? ''} ${name} is now the host.`));
 
-  state.socket.on('player-left', ({ name }) => {
-    showToast(`${name} left the game.`);
-  });
-
-  state.socket.on('countdown', ({ count }) => {
+  // ── Countdown ──────────────────────────────────────────────
+  state.socket.on('countdown', ({ count, letter }) => {
     showView('countdown');
     const el = document.getElementById('countdown-number');
     el.textContent = count;
+    // Restart CSS animation
     el.style.animation = 'none';
-    el.offsetHeight; // reflow to restart animation
+    void el.offsetHeight;
     el.style.animation = '';
-    const meta = document.getElementById('countdown-meta');
-    meta.textContent = state.roundInfo
-      ? `Round ${state.roundInfo.round} of ${state.roundInfo.totalRounds} — Letter: ${state.roundInfo.letter}`
-      : 'Get ready…';
+
+    const preview = document.getElementById('countdown-letter-preview');
+    const sublabel = document.getElementById('countdown-sublabel');
+    if (letter) {
+      preview.style.display = 'block';
+      preview.textContent = `Letter this round: ${letter}`;
+      sublabel.textContent = 'Round starting…';
+    } else {
+      preview.style.display = 'none';
+      sublabel.textContent = 'Get ready…';
+    }
   });
 
+  // ── Round start ────────────────────────────────────────────
   state.socket.on('round-start', (info) => {
-    state.roundInfo = info;
-    state.answers = {};
-    state.submitted = false;
+    state.roundInfo  = info;
+    state.answers    = {};
+    state.submitted  = false;
     state.allAnswers = {};
-    state.allDisputes = {};
+    state.allVotes   = {};
     state.answerStatus = {};
-
-    // update countdown meta in case it fires after countdown view
-    const meta = document.getElementById('countdown-meta');
-    meta.textContent = `Round ${info.round} of ${info.totalRounds} — Letter: ${info.letter}`;
+    // Sync players list from event so scores are current going into the round
+    if (info.players) state.players = info.players;
 
     renderPlaying(info);
     showView('playing');
     startClientTimer(info.timeLimit);
   });
 
-  state.socket.on('timer', ({ timeLeft }) => {
-    updateTimer(timeLeft, state.timerMax);
-  });
+  state.socket.on('timer', ({ timeLeft }) => updateTimer(timeLeft, state.timerMax));
 
   state.socket.on('submission-update', ({ count, total }) => {
     const el = document.getElementById('submission-waiting');
-    if (el) el.textContent = `Waiting for players… ${count}/${total} submitted`;
+    if (el) el.innerHTML = `Waiting for other players… <strong>${count}/${total}</strong> submitted`;
   });
 
-  state.socket.on('round-ended', ({ answers, disputes, letter, categories }) => {
-    state.allAnswers = answers;
-    state.allDisputes = disputes || {};
-    renderReview({ answers, disputes: state.allDisputes, letter, categories });
-    showView('reviewing');
-    startReviewTimer(state.reviewTimerMax);
+  // ── Voting start ───────────────────────────────────────────
+  state.socket.on('voting-start', (data) => {
+    state.allAnswers = data.answers;
+    state.allVotes   = data.votes || {};
+    if (data.players) state.players = data.players;
+
+    renderVoting(data);
+    showView('voting');
+    startVoteTimer(data.voteTime);
   });
 
-  state.socket.on('review-timer', ({ timeLeft }) => {
-    updateReviewTimer(timeLeft);
+  state.socket.on('vote-timer', ({ timeLeft }) => updateVoteTimer(timeLeft));
+
+  state.socket.on('votes-updated', ({ votes }) => {
+    state.allVotes = votes;
+    refreshVoteGrid();
   });
 
-  state.socket.on('disputes-updated', ({ disputes }) => {
-    state.allDisputes = disputes;
-    refreshDisputeButtons();
-  });
-
+  // ── Round results ──────────────────────────────────────────
   state.socket.on('round-results', (data) => {
     state.answerStatus = data.answerStatus;
-    state.allAnswers = data.answers;
+    state.allAnswers   = data.answers;
+    state.players      = data.players;
+
     renderResults(data);
     showView('results');
   });
 
+  // ── Game over ──────────────────────────────────────────────
   state.socket.on('game-over', (data) => {
-    state.answerStatus = data.answerStatus;
-    state.allAnswers = data.answers;
     renderGameOver(data);
     showView('gameover');
   });
 }
 
-/* ── View management ────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   View helpers
+───────────────────────────────────────────────────────────── */
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(`view-${name}`).classList.add('active');
 }
 
-/* ── Toast ──────────────────────────────────────────────────── */
 function showToast(msg, isError = false) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.toggle('error', isError);
   t.classList.add('show');
-  clearTimeout(t._timeout);
-  t._timeout = setTimeout(() => t.classList.remove('show'), 3000);
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 3200);
 }
 
-/* ── Avatar helpers ─────────────────────────────────────────── */
-function avatarInitial(name) { return (name || '?')[0].toUpperCase(); }
-function avatarColor(idx) { return `avatar-colors-${idx % 8}`; }
-function letterColor(round) { return `letter-colors-${(round - 1) % 5}`; }
-function playerIndex(playerId) { return state.players.findIndex(p => p.id === playerId); }
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
-/* ── Lobby rendering ────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   Lobby
+───────────────────────────────────────────────────────────── */
 function renderLobby(room) {
   document.getElementById('lobby-room-code').textContent = room.code || state.roomCode;
-  renderPlayerList('lobby-player-list', room.players, room.host);
+
+  const count = room.players.filter(p => p.connected).length;
+  document.getElementById('lobby-player-count').textContent = `(${count}/${room.maxPlayers})`;
+
+  // Player list
+  const list = document.getElementById('lobby-player-list');
+  list.innerHTML = room.players.map(p => `
+    <div class="player-item ${p.connected ? '' : 'disconnected'}">
+      <div class="animal-avatar">
+        <span class="animal-emoji">${p.animal.emoji}</span>
+        <span class="animal-name-label">${esc(p.animal.name)}</span>
+      </div>
+      <span class="player-item-name">${esc(p.name)}</span>
+      ${p.id === room.host ? '<span class="badge-host">Host</span>' : ''}
+      ${p.id === state.playerId ? '<span class="badge-you">You</span>' : ''}
+    </div>
+  `).join('');
 
   const isHost = room.host === state.playerId;
-  document.getElementById('lobby-settings').style.display = isHost ? 'flex' : 'none';
-  document.getElementById('lobby-waiting-msg').style.display = isHost ? 'none' : 'flex';
+  document.getElementById('lobby-host-panel').style.display = isHost ? 'block' : 'none';
+  document.getElementById('lobby-waiting-panel').style.display = isHost ? 'none' : 'block';
   document.getElementById('btn-start').style.display = isHost ? 'block' : 'none';
 
   if (isHost) {
-    document.getElementById('setting-rounds').value = room.settings.rounds;
-    document.getElementById('setting-time').value = room.settings.timeLimit;
+    document.getElementById('setting-max-players').value = room.maxPlayers;
+    renderCategoryEditor(room.categories);
+  } else {
+    // Show category preview for non-host players
+    const previewSection = document.getElementById('lobby-category-preview');
+    const previewList = document.getElementById('lobby-category-list');
+    if (room.categories && room.categories.length) {
+      previewSection.style.display = 'block';
+      previewList.innerHTML = room.categories.map(c =>
+        `<span class="category-chip">${esc(c)}</span>`
+      ).join('');
+    }
   }
 }
 
-function renderPlayerList(containerId, players, hostId) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  el.innerHTML = players.map((p, i) => `
-    <div class="player-item ${p.connected ? '' : 'disconnected'}">
-      <div class="player-avatar ${avatarColor(i)}">${avatarInitial(p.name)}</div>
-      <span class="player-name">${esc(p.name)}</span>
-      ${p.id === hostId ? '<span class="badge-host">Host</span>' : ''}
-      ${p.id === state.playerId ? '<span class="badge-you">You</span>' : ''}
-      ${containerId !== 'lobby-player-list' ? `<span class="player-score">${p.score}</span>` : ''}
+function renderCategoryEditor(categories) {
+  const grid = document.getElementById('category-editor-grid');
+  grid.innerHTML = (categories || DEFAULT_CATEGORIES).map((cat, i) => `
+    <div class="cat-editor-item">
+      <span class="cat-number">${i + 1}</span>
+      <input class="cat-editor-input" data-index="${i}"
+        type="text" maxlength="60" value="${esc(cat)}"
+        placeholder="Category ${i + 1}" autocomplete="off" />
     </div>
   `).join('');
 }
 
-/* ── Playing view ───────────────────────────────────────────── */
-function renderPlaying({ round, totalRounds, letter, categories, timeLimit }) {
+function getEditorCategories() {
+  return Array.from(document.querySelectorAll('.cat-editor-input'))
+    .map(el => el.value.trim() || `Category ${parseInt(el.dataset.index) + 1}`);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Scoreboard strip
+───────────────────────────────────────────────────────────── */
+function renderScoreboardStrip(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const sorted = [...state.players].sort((a, b) => b.score - a.score);
+  el.innerHTML = sorted.map(p => `
+    <div class="scoreboard-strip-item ${p.connected ? '' : 'disconnected'}">
+      <span class="strip-emoji">${p.animal.emoji}</span>
+      <span class="strip-name">${esc(p.name)}${p.id === state.playerId ? ' (you)' : ''}</span>
+      <span class="strip-score">${p.score}</span>
+    </div>
+  `).join('');
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Playing view
+───────────────────────────────────────────────────────────── */
+function renderPlaying({ round, letter, categories, timeLimit }) {
   state.timerMax = timeLimit;
 
-  document.getElementById('playing-round-label').textContent = `Round ${round} of ${totalRounds}`;
-  const badge = document.getElementById('letter-badge');
+  document.getElementById('playing-round-label').textContent = `Round ${round}`;
+  const badge = document.getElementById('playing-letter-badge');
   badge.textContent = letter;
-  badge.className = `letter-badge ${letterColor(round)}`;
+  badge.className   = `letter-badge ${letterColorClass(round)}`;
 
   updateTimer(timeLimit, timeLimit);
+  renderScoreboardStrip('playing-scoreboard');
 
-  const grid = document.getElementById('category-grid');
+  const grid = document.getElementById('category-inputs-grid');
   grid.innerHTML = categories.map(cat => `
     <div class="category-item">
       <div class="category-name">${esc(cat)}</div>
-      <input
-        class="category-input"
-        type="text"
-        placeholder="${letter}…"
-        autocomplete="off"
-        autocorrect="off"
-        spellcheck="false"
-        data-category="${esc(cat)}"
-      />
+      <input class="category-input" type="text"
+        placeholder="${letter}…" autocomplete="off" autocorrect="off" spellcheck="false"
+        data-category="${esc(cat)}" />
     </div>
   `).join('');
 
@@ -212,116 +281,176 @@ function renderPlaying({ round, totalRounds, letter, categories, timeLimit }) {
   document.getElementById('playing-submitted').style.display = 'none';
 }
 
-let clientTimerInterval = null;
+let _clientTimerInterval = null;
 function startClientTimer(seconds) {
-  clearInterval(clientTimerInterval);
+  clearInterval(_clientTimerInterval);
   let t = seconds;
-  updateTimer(t, seconds);
-  clientTimerInterval = setInterval(() => {
-    t--;
-    if (t <= 0) { clearInterval(clientTimerInterval); t = 0; }
+  _clientTimerInterval = setInterval(() => {
+    t = Math.max(0, t - 1);
     updateTimer(t, seconds);
+    if (t <= 0) clearInterval(_clientTimerInterval);
   }, 1000);
 }
 
 function updateTimer(timeLeft, max) {
-  const bar = document.getElementById('timer-bar');
-  const text = document.getElementById('timer-text');
+  const bar  = document.getElementById('playing-timer-bar');
+  const text = document.getElementById('playing-timer-text');
   if (!bar || !text) return;
 
   const pct = max > 0 ? (timeLeft / max) * 100 : 0;
   bar.style.width = `${pct}%`;
 
-  const cls = timeLeft > max * 0.5 ? 'timer-green' : timeLeft > max * 0.25 ? 'timer-yellow' : 'timer-red';
+  const cls = timeLeft > max * 0.5 ? 'timer-green'
+            : timeLeft > max * 0.25 ? 'timer-yellow' : 'timer-red';
   bar.className = `timer-bar-inner ${cls}`;
   text.className = `timer-text ${cls}`;
   text.textContent = timeLeft;
 }
 
-/* ── Review view ────────────────────────────────────────────── */
-function renderReview({ answers, disputes, letter, categories }) {
-  const isHost = state.host === state.playerId;
-  document.getElementById('review-finalize-btn').style.display = isHost ? 'inline-flex' : 'none';
-  document.getElementById('review-waiting-msg').style.display = isHost ? 'none' : 'block';
-  document.getElementById('review-letter').textContent = letter;
-  updateReviewTimer(state.reviewTimerMax);
+/* ─────────────────────────────────────────────────────────────
+   Voting view
+───────────────────────────────────────────────────────────── */
+function renderVoting({ answers, votes, letter, categories, voteTime, players }) {
+  state.voteTimerMax = voteTime;
+  document.getElementById('voting-letter').textContent = letter;
 
-  const table = buildAnswerTable(categories, answers, disputes, false);
-  const wrap = document.getElementById('review-table-wrap');
+  const isHost = state.host === state.playerId;
+  document.getElementById('btn-finalize-voting').style.display = isHost ? 'inline-flex' : 'none';
+  document.getElementById('voting-waiting-msg').style.display  = isHost ? 'none' : 'block';
+
+  renderScoreboardStrip('voting-scoreboard');
+  updateVoteTimer(voteTime);
+
+  const wrap = document.getElementById('voting-grid-wrap');
   wrap.innerHTML = '';
-  wrap.appendChild(table);
+  wrap.appendChild(buildAnswerGrid(categories, answers, votes, false));
 }
 
-function buildAnswerTable(categories, answers, disputes, showStatus) {
+function refreshVoteGrid() {
+  if (!state.roundInfo) return;
+  const wrap = document.getElementById('voting-grid-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  wrap.appendChild(buildAnswerGrid(
+    state.roundInfo.categories,
+    state.allAnswers,
+    state.allVotes,
+    false
+  ));
+}
+
+let _voteTimerInterval = null;
+function startVoteTimer(seconds) {
+  clearInterval(_voteTimerInterval);
+  let t = seconds;
+  _voteTimerInterval = setInterval(() => {
+    t = Math.max(0, t - 1);
+    updateVoteTimer(t);
+    if (t <= 0) clearInterval(_voteTimerInterval);
+  }, 1000);
+}
+
+function updateVoteTimer(timeLeft) {
+  const bar  = document.getElementById('vote-timer-bar');
+  const text = document.getElementById('vote-timer-text');
+  if (!bar || !text) return;
+  const pct = (timeLeft / state.voteTimerMax) * 100;
+  bar.style.width  = `${Math.max(0, pct)}%`;
+  text.textContent = Math.max(0, timeLeft);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Answer grid builder  (shared by voting + results)
+───────────────────────────────────────────────────────────── */
+function buildAnswerGrid(categories, answers, votes, showResults) {
+  // Only show connected players (or players who answered)
   const players = state.players.filter(p => p.connected || answers[p.id]);
 
   const table = document.createElement('table');
-  table.className = 'answers-table';
+  table.className = 'answers-grid';
 
-  // Header
+  // ── Header row ──────────────────────────────────────────────
   const thead = table.createTHead();
-  const hr = thead.insertRow();
+  const hrow  = thead.insertRow();
+
   const catTh = document.createElement('th');
   catTh.textContent = 'Category';
-  hr.appendChild(catTh);
-  players.forEach((p, i) => {
+  hrow.appendChild(catTh);
+
+  players.forEach(p => {
     const th = document.createElement('th');
-    th.innerHTML = `<span class="player-avatar ${avatarColor(playerIndex(p.id))}" style="display:inline-flex;width:22px;height:22px;font-size:0.7rem;border-radius:50%;align-items:center;justify-content:center;margin-right:6px">${avatarInitial(p.name)}</span>${esc(p.name)}${p.id === state.playerId ? ' <span class="badge-you">You</span>' : ''}`;
-    hr.appendChild(th);
+    th.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <span style="font-size:1.4rem">${p.animal.emoji}</span>
+        <span style="font-weight:700">${esc(p.name)}</span>
+        ${p.id === state.playerId ? '<span class="badge-you" style="font-size:0.6rem">You</span>' : ''}
+      </div>`;
+    hrow.appendChild(th);
   });
 
-  // Rows
+  // ── Data rows ───────────────────────────────────────────────
   const tbody = table.createTBody();
-  categories.forEach(cat => {
+
+  for (const cat of categories) {
     const tr = tbody.insertRow();
+
     const catTd = tr.insertCell();
     catTd.textContent = cat;
-    catTd.style.fontWeight = '600';
 
-    players.forEach(p => {
+    for (const p of players) {
       const td = tr.insertCell();
       const raw = (answers[p.id]?.[cat] || '').trim();
-      const status = showStatus ? (state.answerStatus[p.id]?.[cat] || 'empty') : null;
-      const disputeList = disputes?.[p.id]?.[cat] || [];
-      const iDisputedThis = disputeList.includes(state.playerId);
 
-      let statusClass = '';
-      let statusLabel = '';
-      if (showStatus && status) {
-        statusClass = `status-${status}`;
-        const labels = { valid: '✓ valid', duplicate: '⟳ duplicate', disputed: '✗ disputed', 'wrong-letter': '✗ wrong letter', empty: '—' };
-        statusLabel = `<div class="${statusClass}" style="font-size:0.75rem">${labels[status] || ''}</div>`;
+      if (showResults) {
+        // Results: show coloured status chip
+        const status = state.answerStatus[p.id]?.[cat] || 'empty';
+        const ptLabel = status === 'unique' ? '2 pts'
+                      : status === 'duplicate' ? '1 pt' : null;
+        td.innerHTML = `
+          <div class="answer-cell">
+            <span class="answer-text">${raw ? esc(raw) : '<span class="answer-empty">—</span>'}</span>
+            <span class="status-chip status-${status}">
+              ${statusIcon(status)} ${statusLabel(status, ptLabel)}
+            </span>
+          </div>`;
+      } else {
+        // Voting: show answer + reject button (for other players only)
+        const rejectors = votes[p.id]?.[cat] || [];
+        const others = state.players.filter(x => x.connected && x.id !== p.id);
+        const rejected = others.length > 0 && rejectors.length > others.length / 2;
+        const iRejected = rejectors.includes(state.playerId);
+
+        let voteHtml = '';
+        if (raw && p.id !== state.playerId) {
+          voteHtml = `
+            <button class="vote-reject-btn ${iRejected ? 'active' : ''}"
+              data-pid="${p.id}" data-cat="${esc(cat)}">
+              👎 ${iRejected ? 'Rejected' : 'Reject'}
+            </button>
+            ${rejectors.length > 0
+              ? `<span class="vote-count-label">${rejectors.length} rejection${rejectors.length !== 1 ? 's' : ''}</span>`
+              : ''}`;
+        }
+
+        td.innerHTML = `
+          <div class="answer-cell ${rejected ? 'answer-rejected' : ''}">
+            <span class="answer-text ${rejected ? 'status-voted-invalid' : ''}">
+              ${raw ? esc(raw) : '<span class="answer-empty">—</span>'}
+            </span>
+            ${voteHtml}
+          </div>`;
       }
+    }
+  }
 
-      let disputeBtn = '';
-      if (!showStatus && raw && p.id !== state.playerId) {
-        const active = iDisputedThis ? 'active' : '';
-        const count = disputeList.length;
-        disputeBtn = `
-          <button class="dispute-btn ${active}" data-pid="${p.id}" data-cat="${esc(cat)}">
-            ${iDisputedThis ? '✗ challenged' : '? challenge'}
-          </button>
-          ${count > 0 ? `<span class="dispute-count">${count} challenge${count !== 1 ? 's' : ''}</span>` : ''}
-        `;
-      }
-
-      td.innerHTML = `
-        <div class="answer-cell">
-          <span class="answer-text ${statusClass}">${raw ? esc(raw) : '<span class="muted">—</span>'}</span>
-          ${statusLabel}
-          ${disputeBtn}
-        </div>
-      `;
-    });
-  });
-
-  // Attach dispute listeners
-  if (!showStatus) {
-    table.querySelectorAll('.dispute-btn').forEach(btn => {
+  // Attach vote button listeners
+  if (!showResults) {
+    table.querySelectorAll('.vote-reject-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const pid = btn.dataset.pid;
-        const cat = btn.dataset.cat;
-        state.socket.emit('dispute-answer', { targetPlayerId: pid, category: cat });
+        state.socket.emit('cast-vote', {
+          targetPlayerId: btn.dataset.pid,
+          category: btn.dataset.cat,
+        });
       });
     });
   }
@@ -329,119 +458,87 @@ function buildAnswerTable(categories, answers, disputes, showStatus) {
   return table;
 }
 
-function refreshDisputeButtons() {
-  // Re-render the review table with updated dispute state
-  if (state.roundInfo) {
-    const wrap = document.getElementById('review-table-wrap');
-    if (!wrap) return;
-    const table = buildAnswerTable(
-      state.roundInfo.categories,
-      state.allAnswers,
-      state.allDisputes,
-      false
-    );
-    wrap.innerHTML = '';
-    wrap.appendChild(table);
-  }
+function statusIcon(status) {
+  return { unique: '✓', duplicate: '⟳', 'voted-invalid': '✗', 'wrong-letter': '✗', empty: '—' }[status] || '';
+}
+function statusLabel(status, ptLabel) {
+  if (ptLabel) return ptLabel;
+  return { 'voted-invalid': 'rejected', 'wrong-letter': 'wrong letter', empty: 'no answer' }[status] || status;
 }
 
-let reviewTimerInterval = null;
-function startReviewTimer(seconds) {
-  clearInterval(reviewTimerInterval);
-  let t = seconds;
-  reviewTimerInterval = setInterval(() => {
-    t--;
-    updateReviewTimer(t);
-    if (t <= 0) clearInterval(reviewTimerInterval);
-  }, 1000);
-}
-
-function updateReviewTimer(timeLeft) {
-  const bar = document.getElementById('review-timer-bar');
-  if (!bar) return;
-  const pct = (timeLeft / state.reviewTimerMax) * 100;
-  bar.style.width = `${Math.max(0, pct)}%`;
-  const label = document.getElementById('review-timer-label');
-  if (label) label.textContent = Math.max(0, timeLeft);
-}
-
-/* ── Results view ───────────────────────────────────────────── */
-function renderResults({ pointsThisRound, answerStatus, answers, letter, categories, players, isLastRound }) {
+/* ─────────────────────────────────────────────────────────────
+   Results view
+───────────────────────────────────────────────────────────── */
+function renderResults({ pointsThisRound, answerStatus, answers, letter, categories, players }) {
   state.answerStatus = answerStatus;
-  state.allAnswers = answers;
+  state.allAnswers   = answers;
+  state.players      = players;
 
+  document.getElementById('results-heading').textContent = `Round ${state.roundInfo?.round ?? ''} Complete!`;
+  document.getElementById('results-letter').textContent  = letter;
+
+  // Scoreboard
   const sorted = [...players].sort((a, b) => b.score - a.score);
-  const list = document.getElementById('results-score-list');
   const medals = ['🥇','🥈','🥉'];
-  list.innerHTML = sorted.map((p, i) => `
-    <div class="score-row">
-      <div class="score-rank">${medals[i] || (i + 1)}</div>
-      <div class="player-avatar ${avatarColor(playerIndex(p.id))}" style="width:32px;height:32px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:0.85rem;flex-shrink:0">
-        ${avatarInitial(p.name)}
-      </div>
-      <div class="score-name">${esc(p.name)} ${p.id === state.playerId ? '<span class="badge-you">You</span>' : ''}</div>
-      <div class="score-pts-this-round">+${pointsThisRound[p.id] || 0} pts</div>
-      <div class="score-total">${p.score}</div>
+  const sb = document.getElementById('results-scoreboard');
+  sb.innerHTML = sorted.map((p, i) => `
+    <div class="score-item">
+      <span class="score-rank">${medals[i] || i + 1}</span>
+      <span style="font-size:1.5rem">${p.animal.emoji}</span>
+      <span class="score-name">${esc(p.name)} ${p.id === state.playerId ? '<span class="badge-you">You</span>' : ''}</span>
+      <span class="score-delta">+${pointsThisRound[p.id] || 0} pts</span>
+      <span class="score-total">${p.score}</span>
     </div>
   `).join('');
 
+  // Answer breakdown
+  const wrap = document.getElementById('results-grid-wrap');
+  wrap.innerHTML = '';
+  wrap.appendChild(buildAnswerGrid(categories, answers, {}, true));
+
+  // Host controls
   const isHost = state.host === state.playerId;
-  document.getElementById('btn-next-round').style.display = isHost ? 'inline-flex' : 'none';
-  document.getElementById('results-waiting-msg').style.display = isHost ? 'none' : 'block';
-
-  document.getElementById('results-round-label').textContent =
-    isLastRound ? 'Final Round Complete!' : `Round ${state.currentRound} Complete!`;
-
-  // Show answers breakdown below
-  const wrap = document.getElementById('results-answers-wrap');
-  wrap.innerHTML = '<h3 style="margin-bottom:12px">Answer Review</h3>';
-  wrap.appendChild(buildAnswerTable(categories, answers, {}, true));
+  document.getElementById('results-host-controls').style.display = isHost ? 'flex' : 'none';
+  document.getElementById('results-waiting-msg').style.display   = isHost ? 'none' : 'block';
 }
 
-/* ── Game over view ─────────────────────────────────────────── */
-function renderGameOver({ players, answerStatus, answers, letter, categories }) {
-  const sorted = [...players].sort((a, b) => b.score - a.score);
+/* ─────────────────────────────────────────────────────────────
+   Game over view
+───────────────────────────────────────────────────────────── */
+function renderGameOver({ players }) {
   const medals = ['🥇','🥈','🥉'];
+  document.getElementById('gameover-rounds-played').textContent =
+    `${state.roundInfo?.round ?? '?'} round${(state.roundInfo?.round ?? 1) !== 1 ? 's' : ''} played`;
 
   const podium = document.getElementById('gameover-podium');
-  podium.innerHTML = sorted.map((p, i) => `
+  podium.innerHTML = players.map((p, i) => `
     <div class="podium-item">
-      <div class="podium-medal">${medals[i] || `#${i + 1}`}</div>
-      <div class="player-avatar ${avatarColor(playerIndex(p.id))}" style="width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;flex-shrink:0">
-        ${avatarInitial(p.name)}
-      </div>
-      <div class="podium-name">${esc(p.name)} ${p.id === state.playerId ? '<span class="badge-you">You</span>' : ''}</div>
-      <div class="podium-score">${p.score} pts</div>
+      <span class="podium-medal">${medals[i] ?? `#${i+1}`}</span>
+      <span class="podium-emoji">${p.animal.emoji}</span>
+      <span class="podium-name">${esc(p.name)} ${p.id === state.playerId ? '<span class="badge-you">You</span>' : ''}</span>
+      <span class="podium-score">${p.score} pts</span>
     </div>
   `).join('');
 
   const isHost = state.host === state.playerId;
-  document.getElementById('btn-play-again').style.display = isHost ? 'inline-flex' : 'none';
+  document.getElementById('btn-play-again').style.display   = isHost ? 'inline-flex' : 'none';
   document.getElementById('gameover-waiting-msg').style.display = isHost ? 'none' : 'block';
-
-  if (answerStatus && answers && categories) {
-    state.answerStatus = answerStatus;
-    state.allAnswers = answers;
-    const wrap = document.getElementById('gameover-answers-wrap');
-    wrap.innerHTML = '<h3 style="margin:16px 0 12px">Final Round Answers</h3>';
-    wrap.appendChild(buildAnswerTable(categories, answers, {}, true));
-  }
 }
 
-/* ── HTML escape ────────────────────────────────────────────── */
-function esc(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+/* ─────────────────────────────────────────────────────────────
+   Helpers
+───────────────────────────────────────────────────────────── */
+function letterColorClass(round) {
+  return `letter-colors-${(round - 1) % 5}`;
 }
 
-/* ── DOM event listeners ────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   DOM event listeners
+───────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   connectSocket();
 
-  /* Home — Create */
+  // Home — Create
   document.getElementById('btn-create').addEventListener('click', () => {
     const name = document.getElementById('home-name').value.trim();
     if (!name) { showToast('Enter your name first!', true); return; }
@@ -449,7 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.socket.emit('create-room', { playerName: name });
   });
 
-  /* Home — Join */
+  // Home — Join
   document.getElementById('btn-join').addEventListener('click', joinRoom);
   document.getElementById('home-code').addEventListener('keydown', e => { if (e.key === 'Enter') joinRoom(); });
   document.getElementById('home-name').addEventListener('keydown', e => {
@@ -465,63 +562,73 @@ document.addEventListener('DOMContentLoaded', () => {
     state.socket.emit('join-room', { playerName: name, roomCode: code });
   }
 
-  /* Lobby — Copy code */
+  // Lobby — Copy code
   document.getElementById('btn-copy-code').addEventListener('click', () => {
     const code = document.getElementById('lobby-room-code').textContent;
-    navigator.clipboard.writeText(code).then(() => showToast('Room code copied!')).catch(() => {});
+    navigator.clipboard.writeText(code)
+      .then(() => showToast('Room code copied!'))
+      .catch(() => showToast(code));  // fallback: just show it
   });
 
-  /* Lobby — Settings */
-  document.getElementById('setting-rounds').addEventListener('change', sendSettings);
-  document.getElementById('setting-time').addEventListener('change', sendSettings);
-  function sendSettings() {
+  // Lobby — Settings
+  document.getElementById('setting-max-players').addEventListener('change', () => {
     state.socket.emit('update-settings', {
-      rounds: parseInt(document.getElementById('setting-rounds').value),
-      timeLimit: parseInt(document.getElementById('setting-time').value),
+      maxPlayers: parseInt(document.getElementById('setting-max-players').value),
+      categories: getEditorCategories(),
     });
-  }
-
-  /* Lobby — Start */
-  document.getElementById('btn-start').addEventListener('click', () => {
-    state.socket.emit('start-game');
   });
 
-  /* Playing — Submit */
+  // Lobby — Reset categories
+  document.getElementById('btn-reset-categories').addEventListener('click', () => {
+    renderCategoryEditor(DEFAULT_CATEGORIES);
+    state.socket.emit('update-settings', {
+      maxPlayers: parseInt(document.getElementById('setting-max-players').value),
+      categories: [...DEFAULT_CATEGORIES],
+    });
+  });
+
+  // Lobby — Start game
+  document.getElementById('btn-start').addEventListener('click', () => {
+    const categories = getEditorCategories();
+    state.socket.emit('start-game', { categories });
+  });
+
+  // Playing — Submit answers
   document.getElementById('btn-submit-answers').addEventListener('click', submitAnswers);
 
   function submitAnswers() {
     if (state.submitted) return;
     state.submitted = true;
-    clearInterval(clientTimerInterval);
+    clearInterval(_clientTimerInterval);
 
-    // Collect from inputs
     document.querySelectorAll('.category-input').forEach(input => {
       state.answers[input.dataset.category] = input.value.trim();
       input.disabled = true;
     });
 
     document.getElementById('playing-form').style.display = 'none';
-    const sub = document.getElementById('playing-submitted');
-    sub.style.display = 'block';
-    document.getElementById('submission-waiting').textContent = 'Waiting for other players…';
+    document.getElementById('playing-submitted').style.display = 'block';
 
     state.socket.emit('submit-answers', { answers: state.answers });
   }
 
-  /* Review — Finalize */
-  document.getElementById('review-finalize-btn').addEventListener('click', () => {
-    state.socket.emit('finalize-round');
+  // Voting — Finalize
+  document.getElementById('btn-finalize-voting').addEventListener('click', () => {
+    state.socket.emit('finalize-voting');
   });
 
-  /* Results — Next Round */
+  // Results — Next round
   document.getElementById('btn-next-round').addEventListener('click', () => {
     state.socket.emit('next-round');
   });
 
-  /* Game Over — Play Again */
+  // Results — End game
+  document.getElementById('btn-end-game').addEventListener('click', () => {
+    state.socket.emit('end-game');
+  });
+
+  // Game over — Play again
   document.getElementById('btn-play-again').addEventListener('click', () => {
     state.socket.emit('play-again');
   });
-
-  /* Game Over / Results — Back to lobby (go home) via play-again flow */
 });

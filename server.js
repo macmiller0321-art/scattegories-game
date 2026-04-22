@@ -7,34 +7,34 @@ const os = require('os');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  // Allow WebSocket upgrade behind reverse proxies (Render, Railway, etc.)
   transports: ['websocket', 'polling'],
   cors: { origin: '*' },
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const CATEGORIES = [
-  'Animals', 'Countries', 'Cities', 'Foods & Drinks', 'Movies',
-  'TV Shows', 'Songs / Artists', 'Famous People', 'Sports',
-  'Things in a Kitchen', 'Things at a Beach', 'Colors',
-  'Clothing & Accessories', 'Vehicles', 'Occupations / Jobs',
-  'Board Games', 'Fruits & Vegetables', 'Brands / Companies',
-  'Things That Are Round', 'Fictional Characters',
-  'School Subjects', 'Body Parts', 'Things in a Bedroom',
-  'Musical Instruments', 'Things in a Park', 'Superheroes',
-  'Types of Weather', 'Hobbies', 'Things That Are Cold',
-  'Desserts & Sweets', 'Things Found in Nature', 'Dances',
-  'Things in a Hospital', 'Card or Dice Games', 'Insects'
+const ANIMALS = [
+  { name: 'Fox',      emoji: '🦊' },
+  { name: 'Panda',    emoji: '🐼' },
+  { name: 'Lion',     emoji: '🦁' },
+  { name: 'Owl',      emoji: '🦉' },
+  { name: 'Penguin',  emoji: '🐧' },
+  { name: 'Tiger',    emoji: '🐯' },
+  { name: 'Bear',     emoji: '🐻' },
+  { name: 'Wolf',     emoji: '🐺' },
+  { name: 'Rabbit',   emoji: '🐰' },
+  { name: 'Koala',    emoji: '🐨' },
 ];
 
-const LETTERS = [
-  'A','B','C','D','E','F','G','H','I','J','K','L','M',
-  'N','O','P','R','S','T','W'
+const DEFAULT_CATEGORIES = [
+  'Animals', 'Countries', 'Foods & Drinks', 'Movies', 'Famous People',
+  'Cities', 'Things in a Kitchen', 'Clothing & Accessories', 'Occupations / Jobs', 'Sports',
 ];
 
-const CATEGORIES_PER_ROUND = 12;
-const REVIEW_TIME = 45;
+// A–Z excluding Q, U, X, Y, Z
+const LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','R','S','T','V','W'];
+const ROUND_TIME = 75;
+const VOTE_TIME = 40;
 
 const rooms = new Map();
 
@@ -49,26 +49,34 @@ function generateRoomCode() {
 
 function pickLetter(usedLetters) {
   const available = LETTERS.filter(l => !usedLetters.includes(l));
-  const pool = available.length > 0 ? available : LETTERS;
+  const pool = available.length > 0 ? available : [...LETTERS];
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function pickCategories() {
-  return [...CATEGORIES].sort(() => Math.random() - 0.5).slice(0, CATEGORIES_PER_ROUND);
+function assignAnimal(room) {
+  const used = new Set(room.players.map(p => p.animal.name));
+  return ANIMALS.find(a => !used.has(a.name)) || ANIMALS[room.players.length % ANIMALS.length];
 }
 
 function publicRoom(room) {
   return {
-    players: room.players.map(p => ({ id: p.id, name: p.name, score: p.score, connected: p.connected })),
+    players: room.players.map(p => ({
+      id: p.id,
+      name: p.name,
+      animal: p.animal,
+      score: p.score,
+      connected: p.connected,
+    })),
     host: room.host,
     state: room.state,
-    settings: room.settings,
+    maxPlayers: room.maxPlayers,
+    categories: room.categories,
     currentRound: room.currentRound,
   };
 }
 
 function scoreRound(room) {
-  const { letter, categories, answers = {}, disputes = {} } = room.round;
+  const { categories, answers = {}, votes = {} } = room.round;
   const pointsThisRound = {};
   const answerStatus = {};
 
@@ -78,53 +86,36 @@ function scoreRound(room) {
   }
 
   for (const category of categories) {
-    // Normalize all answers for this category
-    const normalized = {};
+    const validAnswers = {}; // playerId → normalised answer
+
     for (const p of room.players) {
       const raw = (answers[p.id]?.[category] || '').trim();
-      normalized[p.id] = raw;
+
+      if (!raw) { answerStatus[p.id][category] = 'empty'; continue; }
+      if (raw.toUpperCase()[0] !== room.round.letter) {
+        answerStatus[p.id][category] = 'wrong-letter'; continue;
+      }
+
+      // Rejected by majority of other connected players?
+      const rejectors = votes[p.id]?.[category] || [];
+      const others = room.players.filter(x => x.connected && x.id !== p.id);
+      if (others.length > 0 && rejectors.length > others.length / 2) {
+        answerStatus[p.id][category] = 'voted-invalid'; continue;
+      }
+
+      validAnswers[p.id] = raw.toLowerCase();
     }
 
-    // Count how many players gave each normalized value (case-insensitive)
+    // Unique vs duplicate among valid answers
     const valueCounts = {};
-    for (const [pid, raw] of Object.entries(normalized)) {
-      if (!raw) continue;
-      const key = raw.toLowerCase();
-      if (!valueCounts[key]) valueCounts[key] = [];
-      valueCounts[key].push(pid);
+    for (const ans of Object.values(validAnswers)) {
+      valueCounts[ans] = (valueCounts[ans] || 0) + 1;
     }
 
-    for (const p of room.players) {
-      const raw = normalized[p.id];
-
-      if (!raw) {
-        answerStatus[p.id][category] = 'empty';
-        continue;
-      }
-
-      if (raw.toUpperCase()[0] !== letter) {
-        answerStatus[p.id][category] = 'wrong-letter';
-        continue;
-      }
-
-      const key = raw.toLowerCase();
-      if (valueCounts[key].length > 1) {
-        answerStatus[p.id][category] = 'duplicate';
-        continue;
-      }
-
-      // Check disputes: disputed if more than half of other connected players flagged it
-      const disputerList = disputes[p.id]?.[category] || [];
-      const otherConnected = room.players.filter(x => x.connected && x.id !== p.id);
-      const isDisputed = otherConnected.length > 0 && disputerList.length > otherConnected.length / 2;
-
-      if (isDisputed) {
-        answerStatus[p.id][category] = 'disputed';
-        continue;
-      }
-
-      answerStatus[p.id][category] = 'valid';
-      pointsThisRound[p.id]++;
+    for (const [pid, ans] of Object.entries(validAnswers)) {
+      const unique = valueCounts[ans] === 1;
+      answerStatus[pid][category] = unique ? 'unique' : 'duplicate';
+      pointsThisRound[pid] += unique ? 2 : 1;
     }
   }
 
@@ -149,32 +140,33 @@ function startRound(room) {
   room.round = {
     number: room.currentRound,
     letter,
-    categories: pickCategories(),
+    categories: [...room.categories],
     answers: {},
-    disputes: {},
+    votes: {},
     submitted: new Set(),
-    timeLeft: room.settings.timeLimit,
+    timeLeft: ROUND_TIME,
   };
 
   room.state = 'countdown';
   io.to(room.code).emit('room-updated', publicRoom(room));
 
   let count = 3;
-  io.to(room.code).emit('countdown', { count });
+  io.to(room.code).emit('countdown', { count, letter });
 
   room.timers.countdown = setInterval(() => {
     count--;
     if (count > 0) {
-      io.to(room.code).emit('countdown', { count });
+      io.to(room.code).emit('countdown', { count, letter });
     } else {
       clearInterval(room.timers.countdown);
+      delete room.timers.countdown;
       room.state = 'playing';
       io.to(room.code).emit('round-start', {
         round: room.currentRound,
-        totalRounds: room.settings.rounds,
         letter,
         categories: room.round.categories,
-        timeLimit: room.settings.timeLimit,
+        timeLimit: ROUND_TIME,
+        players: room.players.map(p => ({ id: p.id, name: p.name, animal: p.animal, score: p.score })),
       });
       startRoundTimer(room);
     }
@@ -182,12 +174,13 @@ function startRound(room) {
 }
 
 function startRoundTimer(room) {
-  room.round.timeLeft = room.settings.timeLimit;
+  room.round.timeLeft = ROUND_TIME;
   room.timers.round = setInterval(() => {
     room.round.timeLeft--;
     io.to(room.code).emit('timer', { timeLeft: room.round.timeLeft });
     if (room.round.timeLeft <= 0) {
       clearInterval(room.timers.round);
+      delete room.timers.round;
       endRound(room);
     }
   }, 1000);
@@ -197,30 +190,32 @@ function endRound(room) {
   if (room.state !== 'playing') return;
   clearTimers(room);
 
-  room.state = 'reviewing';
-  io.to(room.code).emit('round-ended', {
+  room.state = 'voting';
+  io.to(room.code).emit('voting-start', {
     answers: room.round.answers,
-    disputes: room.round.disputes,
+    votes: room.round.votes,
     letter: room.round.letter,
     categories: room.round.categories,
+    voteTime: VOTE_TIME,
+    players: room.players.map(p => ({ id: p.id, name: p.name, animal: p.animal, score: p.score })),
   });
 
-  let reviewTimeLeft = REVIEW_TIME;
-  io.to(room.code).emit('review-timer', { timeLeft: reviewTimeLeft });
+  let voteTimeLeft = VOTE_TIME;
+  io.to(room.code).emit('vote-timer', { timeLeft: voteTimeLeft });
 
-  room.timers.reviewInterval = setInterval(() => {
-    reviewTimeLeft--;
-    io.to(room.code).emit('review-timer', { timeLeft: reviewTimeLeft });
-    if (reviewTimeLeft <= 0) clearInterval(room.timers.reviewInterval);
+  room.timers.voteInterval = setInterval(() => {
+    voteTimeLeft--;
+    io.to(room.code).emit('vote-timer', { timeLeft: voteTimeLeft });
+    if (voteTimeLeft <= 0) clearInterval(room.timers.voteInterval);
   }, 1000);
 
-  room.timers.reviewTimeout = setTimeout(() => {
-    if (room.state === 'reviewing') finalizeRound(room);
-  }, REVIEW_TIME * 1000);
+  room.timers.voteTimeout = setTimeout(() => {
+    if (room.state === 'voting') finalizeVoting(room);
+  }, VOTE_TIME * 1000);
 }
 
-function finalizeRound(room) {
-  if (room.state !== 'reviewing') return;
+function finalizeVoting(room) {
+  if (room.state !== 'voting') return;
   clearTimers(room);
 
   const { pointsThisRound, answerStatus } = scoreRound(room);
@@ -228,39 +223,43 @@ function finalizeRound(room) {
     p.score += pointsThisRound[p.id] || 0;
   }
 
-  const isLastRound = room.currentRound >= room.settings.rounds;
-  room.state = isLastRound ? 'ended' : 'results';
-
-  const payload = {
+  room.state = 'results';
+  io.to(room.code).emit('round-results', {
     pointsThisRound,
     answerStatus,
     answers: room.round.answers,
     letter: room.round.letter,
     categories: room.round.categories,
-    players: room.players.map(p => ({ id: p.id, name: p.name, score: p.score })),
-    isLastRound,
-  };
-
-  if (isLastRound) {
-    io.to(room.code).emit('game-over', payload);
-  } else {
-    io.to(room.code).emit('round-results', payload);
-  }
+    players: room.players.map(p => ({ id: p.id, name: p.name, animal: p.animal, score: p.score })),
+  });
 }
 
+function endGame(room) {
+  clearTimers(room);
+  room.state = 'ended';
+  const sorted = [...room.players].sort((a, b) => b.score - a.score);
+  io.to(room.code).emit('game-over', {
+    players: sorted.map(p => ({ id: p.id, name: p.name, animal: p.animal, score: p.score })),
+  });
+}
+
+// ── Socket handlers ───────────────────────────────────────────
+
 io.on('connection', (socket) => {
+
   socket.on('create-room', ({ playerName }) => {
-    const name = playerName.trim().slice(0, 20);
+    const name = (playerName || '').trim().slice(0, 20);
     if (!name) return;
 
     const code = generateRoomCode();
-    const player = { id: socket.id, name, score: 0, connected: true };
+    const animal = ANIMALS[0];
     const room = {
       code,
       host: socket.id,
-      players: [player],
+      players: [{ id: socket.id, name, animal, score: 0, connected: true }],
       state: 'lobby',
-      settings: { rounds: 3, timeLimit: 120 },
+      maxPlayers: 10,
+      categories: [...DEFAULT_CATEGORIES],
       currentRound: 0,
       usedLetters: [],
       round: null,
@@ -271,7 +270,7 @@ io.on('connection', (socket) => {
     socket.join(code);
     socket.roomCode = code;
 
-    socket.emit('room-created', { roomCode: code, playerId: socket.id });
+    socket.emit('room-created', { roomCode: code, playerId: socket.id, animal });
     socket.emit('room-updated', publicRoom(room));
   });
 
@@ -282,44 +281,56 @@ io.on('connection', (socket) => {
 
     const room = rooms.get(code);
     if (!room) { socket.emit('join-error', { message: 'Room not found. Check the code and try again.' }); return; }
-    if (room.state !== 'lobby') { socket.emit('join-error', { message: 'Game already in progress.' }); return; }
-    if (room.players.filter(p => p.connected).length >= 8) { socket.emit('join-error', { message: 'Room is full (max 8 players).' }); return; }
+    if (room.state !== 'lobby') { socket.emit('join-error', { message: 'This game is already in progress.' }); return; }
+    if (room.players.filter(p => p.connected).length >= room.maxPlayers) {
+      socket.emit('join-error', { message: `Room is full (max ${room.maxPlayers} players).` }); return;
+    }
 
-    // Allow rejoin by same name if disconnected slot exists
+    const animal = assignAnimal(room);
     const existing = room.players.find(p => !p.connected && p.name === name);
     if (existing) {
       existing.id = socket.id;
       existing.connected = true;
-      if (room.host === existing.id) room.host = socket.id;
+      existing.animal = animal;
     } else {
-      room.players.push({ id: socket.id, name, score: 0, connected: true });
+      room.players.push({ id: socket.id, name, animal, score: 0, connected: true });
     }
 
     socket.join(code);
     socket.roomCode = code;
-    socket.emit('room-joined', { roomCode: code, playerId: socket.id });
+    socket.emit('room-joined', { roomCode: code, playerId: socket.id, animal });
     io.to(code).emit('room-updated', publicRoom(room));
   });
 
-  socket.on('update-settings', ({ rounds, timeLimit }) => {
+  socket.on('update-settings', ({ maxPlayers, categories }) => {
     const room = rooms.get(socket.roomCode);
     if (!room || room.host !== socket.id || room.state !== 'lobby') return;
-    if ([2,3,4,5].includes(rounds)) room.settings.rounds = rounds;
-    if ([60,90,120,180].includes(timeLimit)) room.settings.timeLimit = timeLimit;
+
+    if (Number.isInteger(maxPlayers) && maxPlayers >= 2 && maxPlayers <= 10) {
+      room.maxPlayers = maxPlayers;
+    }
+    if (Array.isArray(categories) && categories.length === 10) {
+      room.categories = categories.map(c => (c || '').trim().slice(0, 60) || 'Category');
+    }
     io.to(room.code).emit('room-updated', publicRoom(room));
   });
 
-  socket.on('start-game', () => {
+  socket.on('start-game', ({ categories } = {}) => {
     const room = rooms.get(socket.roomCode);
     if (!room || room.host !== socket.id || room.state !== 'lobby') return;
-    const connected = room.players.filter(p => p.connected);
-    if (connected.length < 2) { socket.emit('join-error', { message: 'Need at least 2 players to start.' }); return; }
+    if (room.players.filter(p => p.connected).length < 2) {
+      socket.emit('join-error', { message: 'Need at least 2 players to start.' }); return;
+    }
+    if (Array.isArray(categories) && categories.length === 10) {
+      room.categories = categories.map(c => (c || '').trim().slice(0, 60) || 'Category');
+    }
     startRound(room);
   });
 
   socket.on('submit-answers', ({ answers }) => {
     const room = rooms.get(socket.roomCode);
     if (!room || room.state !== 'playing') return;
+
     room.round.answers[socket.id] = answers;
     room.round.submitted.add(socket.id);
 
@@ -335,31 +346,39 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('dispute-answer', ({ targetPlayerId, category }) => {
+  // Toggle a rejection vote on another player's answer
+  socket.on('cast-vote', ({ targetPlayerId, category }) => {
     const room = rooms.get(socket.roomCode);
-    if (!room || room.state !== 'reviewing' || socket.id === targetPlayerId) return;
+    if (!room || room.state !== 'voting' || socket.id === targetPlayerId) return;
 
-    const d = room.round.disputes;
-    if (!d[targetPlayerId]) d[targetPlayerId] = {};
-    if (!d[targetPlayerId][category]) d[targetPlayerId][category] = [];
+    const { votes } = room.round;
+    if (!votes[targetPlayerId]) votes[targetPlayerId] = {};
+    if (!votes[targetPlayerId][category]) votes[targetPlayerId][category] = [];
 
-    const list = d[targetPlayerId][category];
+    const list = votes[targetPlayerId][category];
     const idx = list.indexOf(socket.id);
-    if (idx === -1) list.push(socket.id); else list.splice(idx, 1);
+    if (idx === -1) list.push(socket.id);
+    else list.splice(idx, 1);
 
-    io.to(room.code).emit('disputes-updated', { disputes: room.round.disputes });
+    io.to(room.code).emit('votes-updated', { votes });
   });
 
-  socket.on('finalize-round', () => {
+  socket.on('finalize-voting', () => {
     const room = rooms.get(socket.roomCode);
-    if (!room || room.host !== socket.id || room.state !== 'reviewing') return;
-    finalizeRound(room);
+    if (!room || room.host !== socket.id || room.state !== 'voting') return;
+    finalizeVoting(room);
   });
 
   socket.on('next-round', () => {
     const room = rooms.get(socket.roomCode);
     if (!room || room.host !== socket.id || room.state !== 'results') return;
     startRound(room);
+  });
+
+  socket.on('end-game', () => {
+    const room = rooms.get(socket.roomCode);
+    if (!room || room.host !== socket.id || room.state !== 'results') return;
+    endGame(room);
   });
 
   socket.on('play-again', () => {
@@ -369,6 +388,7 @@ io.on('connection', (socket) => {
     room.currentRound = 0;
     room.usedLetters = [];
     room.round = null;
+    room.categories = [...DEFAULT_CATEGORIES];
     room.state = 'lobby';
     io.to(room.code).emit('room-updated', publicRoom(room));
   });
@@ -382,12 +402,15 @@ io.on('connection', (socket) => {
     const player = room.players.find(p => p.id === socket.id);
     if (player) {
       player.connected = false;
-      io.to(code).emit('player-left', { name: player.name });
+      io.to(code).emit('player-left', { name: player.name, animal: player.animal });
     }
 
     if (room.host === socket.id) {
       const next = room.players.find(p => p.connected);
-      if (next) room.host = next.id;
+      if (next) {
+        room.host = next.id;
+        io.to(code).emit('host-changed', { name: next.name, animal: next.animal });
+      }
     }
 
     if (room.players.every(p => !p.connected)) {
@@ -398,7 +421,6 @@ io.on('connection', (socket) => {
 
     io.to(code).emit('room-updated', publicRoom(room));
 
-    // If during playing and all submitted now
     if (room.state === 'playing' && room.round) {
       const connectedCount = room.players.filter(p => p.connected).length;
       if (room.round.submitted.size >= connectedCount) {
@@ -421,5 +443,5 @@ server.listen(PORT, '0.0.0.0', () => {
       }
     }
   }
-  console.log(`\nShare the Network URL with other players on your WiFi.\n`);
+  console.log(`\nShare that URL with players anywhere!\n`);
 });

@@ -8,224 +8,247 @@
 </head>
 <body>
 
-<!-- ── Home ────────────────────────────────────────────────── -->
+<!-- ── Home ─────────────────────────────────────────────────── -->
 <div id="view-home" class="view active">
   <div class="container" style="justify-content:center;padding-top:40px">
     <div class="logo">
       <h1>Scattergories</h1>
-      <p class="tagline">Multiplayer • Real-time • Free</p>
+      <p class="tagline">Multiplayer · Real-time · Global</p>
     </div>
 
     <div class="card">
-      <div class="label" style="margin-bottom:10px">Your name</div>
-      <input id="home-name" class="input normal-case" type="text" placeholder="Enter your name…" maxlength="20" autocomplete="off" />
+      <div class="label mb-8">Your name</div>
+      <input id="home-name" class="input normal-case" type="text"
+        placeholder="Enter your name…" maxlength="20" autocomplete="off" />
     </div>
 
     <div class="card">
-      <h3 style="margin-bottom:14px">Create a new game</h3>
+      <h3 class="mb-12">Create a new game</h3>
       <button id="btn-create" class="btn btn-primary btn-full">Create Room</button>
     </div>
 
     <div class="divider">or join an existing game</div>
 
     <div class="card">
-      <h3 style="margin-bottom:14px">Join a game</h3>
+      <h3 class="mb-12">Join a game</h3>
       <div class="input-group">
-        <input id="home-code" class="input" type="text" placeholder="ENTER CODE" maxlength="5" autocomplete="off" />
+        <input id="home-code" class="input" type="text"
+          placeholder="ENTER CODE" maxlength="5" autocomplete="off" />
         <button id="btn-join" class="btn btn-ghost">Join</button>
       </div>
     </div>
-
-    <p class="muted text-center" style="padding-bottom:24px">
-      Share the room code with friends on your network to play together.
-    </p>
   </div>
 </div>
 
-<!-- ── Lobby ────────────────────────────────────────────────── -->
+<!-- ── Lobby ─────────────────────────────────────────────────── -->
 <div id="view-lobby" class="view">
-  <div class="container" style="padding-top:24px">
-    <div class="card">
-      <div class="label" style="margin-bottom:8px">Room Code — share with friends!</div>
+  <div class="container" style="padding-top:20px">
+
+    <div class="card card-sm">
+      <div class="label mb-6">Room Code — share with friends</div>
       <div class="room-code-display">
         <span class="room-code-big" id="lobby-room-code">-----</span>
         <button id="btn-copy-code" class="btn btn-ghost btn-sm">Copy</button>
       </div>
     </div>
 
-    <div class="card">
-      <div class="label" style="margin-bottom:12px">Players</div>
+    <div class="card card-sm">
+      <div class="label mb-10">Players <span id="lobby-player-count" class="muted"></span></div>
       <div id="lobby-player-list" class="player-list"></div>
     </div>
 
-    <!-- Host settings -->
-    <div id="lobby-settings" class="card" style="display:none;flex-direction:column;gap:14px">
-      <h3>Game Settings</h3>
-      <div class="row" style="gap:12px">
+    <!-- Host: settings + category editor -->
+    <div id="lobby-host-panel" class="card" style="display:none">
+      <h3 class="mb-14">Game Settings</h3>
+
+      <div class="row mb-16">
         <div style="flex:1">
-          <div class="label" style="margin-bottom:6px">Rounds</div>
-          <select id="setting-rounds" class="input">
-            <option value="2">2 rounds</option>
-            <option value="3" selected>3 rounds</option>
-            <option value="4">4 rounds</option>
-            <option value="5">5 rounds</option>
-          </select>
-        </div>
-        <div style="flex:1">
-          <div class="label" style="margin-bottom:6px">Time per round</div>
-          <select id="setting-time" class="input">
-            <option value="60">1 minute</option>
-            <option value="90">1½ minutes</option>
-            <option value="120" selected>2 minutes</option>
-            <option value="180">3 minutes</option>
+          <div class="label mb-6">Max players</div>
+          <select id="setting-max-players" class="input">
+            <option value="2">2 players</option>
+            <option value="3">3 players</option>
+            <option value="4">4 players</option>
+            <option value="5">5 players</option>
+            <option value="6">6 players</option>
+            <option value="7">7 players</option>
+            <option value="8">8 players</option>
+            <option value="9">9 players</option>
+            <option value="10" selected>10 players</option>
           </select>
         </div>
       </div>
+
+      <div class="label mb-8">
+        Categories for this game
+        <button id="btn-reset-categories" class="btn btn-ghost btn-sm" style="margin-left:10px">Reset to defaults</button>
+      </div>
+      <div id="category-editor-grid" class="category-editor-grid"></div>
     </div>
 
-    <!-- Non-host waiting message -->
-    <div id="lobby-waiting-msg" class="card text-center" style="display:none">
-      <span class="muted">Waiting for the host to start the game<span class="waiting-dots"></span></span>
+    <!-- Non-host: waiting + category preview -->
+    <div id="lobby-waiting-panel" class="card text-center" style="display:none">
+      <div class="muted">Waiting for the host to start the game<span class="waiting-dots"></span></div>
+      <div id="lobby-category-preview" style="margin-top:14px;display:none">
+        <div class="label mb-8">Categories this round</div>
+        <div id="lobby-category-list" class="category-preview-list"></div>
+      </div>
     </div>
 
-    <button id="btn-start" class="btn btn-success btn-full" style="display:none;font-size:1.1rem;padding:16px">
+    <button id="btn-start" class="btn btn-success btn-full" style="display:none;font-size:1.05rem;padding:15px">
       Start Game
     </button>
   </div>
 </div>
 
-<!-- ── Countdown ────────────────────────────────────────────── -->
+<!-- ── Countdown ──────────────────────────────────────────────── -->
 <div id="view-countdown" class="view" style="justify-content:center;text-align:center">
   <div>
-    <div class="label" id="countdown-meta" style="margin-bottom:24px;font-size:1rem">Get ready…</div>
+    <div id="countdown-letter-preview" class="countdown-letter-preview" style="display:none">
+      Round letter:
+    </div>
     <div class="countdown-number" id="countdown-number">3</div>
-    <div class="countdown-label">Starting in…</div>
+    <div id="countdown-sublabel" class="countdown-label">Get ready…</div>
   </div>
 </div>
 
-<!-- ── Playing ──────────────────────────────────────────────── -->
+<!-- ── Playing ───────────────────────────────────────────────── -->
 <div id="view-playing" class="view">
-  <div class="container" style="padding-top:16px">
+  <div class="container wide-container" style="padding-top:14px">
 
-    <!-- Header: letter + round info + timer -->
-    <div class="card card-sm">
-      <div class="playing-header">
-        <div id="letter-badge" class="letter-badge letter-colors-0">A</div>
+    <!-- Round header -->
+    <div class="card card-sm playing-header-card">
+      <div class="playing-top-row">
+        <div class="letter-badge-wrap">
+          <div id="playing-letter-badge" class="letter-badge letter-colors-0">A</div>
+          <div class="letter-label">This round's letter</div>
+        </div>
         <div class="playing-meta">
-          <div class="label" id="playing-round-label">Round 1 of 3</div>
-          <div style="color:var(--muted);font-size:0.85rem;margin-top:2px">Fill in a word for each category starting with the letter!</div>
+          <div class="label" id="playing-round-label">Round 1</div>
+          <div class="muted" style="font-size:0.82rem;margin-top:2px">Write one answer per category starting with the letter</div>
         </div>
-      </div>
-      <div class="timer-wrap" style="margin-top:14px">
-        <div class="timer-bar-outer">
-          <div id="timer-bar" class="timer-bar-inner timer-green" style="width:100%"></div>
+        <div class="timer-block">
+          <div id="playing-timer-text" class="timer-text timer-green">75</div>
+          <div class="timer-bar-outer">
+            <div id="playing-timer-bar" class="timer-bar-inner timer-green" style="width:100%"></div>
+          </div>
         </div>
-        <div id="timer-text" class="timer-text timer-green">120</div>
       </div>
     </div>
 
-    <!-- Category grid (answer inputs) -->
-    <div id="playing-form">
-      <div class="card">
-        <div id="category-grid" class="category-grid"></div>
-        <button id="btn-submit-answers" class="btn btn-success btn-full" style="margin-top:18px">
-          Submit Answers Early
-        </button>
-      </div>
+    <!-- Live scoreboard strip -->
+    <div id="playing-scoreboard" class="scoreboard-strip"></div>
+
+    <!-- Category inputs -->
+    <div id="playing-form" class="card">
+      <div id="category-inputs-grid" class="category-grid"></div>
+      <button id="btn-submit-answers" class="btn btn-success btn-full" style="margin-top:16px">
+        Submit Answers Early
+      </button>
     </div>
 
     <!-- After submission -->
-    <div id="playing-submitted" style="display:none">
-      <div class="card text-center">
-        <div class="submission-status">
-          <div class="big-check">✅</div>
-          <div style="font-weight:700;font-size:1.1rem">Answers Submitted!</div>
-          <div id="submission-waiting" class="muted mt-8">Waiting for other players…</div>
-        </div>
-      </div>
+    <div id="playing-submitted" class="card text-center" style="display:none">
+      <div style="font-size:2.8rem;margin-bottom:10px">✅</div>
+      <div style="font-weight:700;font-size:1.1rem">Answers Submitted!</div>
+      <div id="submission-waiting" class="muted" style="margin-top:6px">Waiting for other players<span class="waiting-dots"></span></div>
     </div>
 
   </div>
 </div>
 
-<!-- ── Reviewing ────────────────────────────────────────────── -->
-<div id="view-reviewing" class="view">
-  <div class="container" style="padding-top:16px;max-width:900px">
+<!-- ── Voting ────────────────────────────────────────────────── -->
+<div id="view-voting" class="view">
+  <div class="container wide-container" style="padding-top:14px">
 
     <div class="card card-sm">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div class="voting-header-row">
         <div>
-          <h2>Review Round — Letter: <span id="review-letter" style="color:var(--accent)">A</span></h2>
-          <div class="muted mt-4">Challenge any answer that doesn't start with the letter or seems invalid. Majority rules!</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <div id="review-waiting-msg" class="muted" style="display:none">
-            <span class="waiting-dots">Waiting for host</span>
+          <h2>Vote on Answers — Letter: <span id="voting-letter" style="color:var(--accent)">A</span></h2>
+          <div class="muted" style="font-size:0.83rem;margin-top:3px">
+            Click <strong>👎 Reject</strong> on any answer you think is invalid. Majority rules.
           </div>
-          <button id="review-finalize-btn" class="btn btn-success btn-sm" style="display:none">
-            Finalize &amp; Score
+        </div>
+        <div class="voting-header-actions">
+          <div style="text-align:right">
+            <div id="vote-timer-text" class="vote-timer-text">40</div>
+            <div class="label">seconds left</div>
+          </div>
+          <button id="btn-finalize-voting" class="btn btn-success btn-sm" style="display:none">
+            Lock In &amp; Score
           </button>
+          <div id="voting-waiting-msg" class="muted" style="display:none;font-size:0.85rem">
+            Waiting for host<span class="waiting-dots"></span>
+          </div>
         </div>
       </div>
-      <!-- Review timer bar -->
-      <div style="margin-top:12px;background:var(--surface2);border-radius:99px;height:4px;overflow:hidden">
-        <div id="review-timer-bar" class="review-timer-bar" style="width:100%"></div>
+      <div class="vote-timer-bar-outer mt-10">
+        <div id="vote-timer-bar" class="vote-timer-bar-inner" style="width:100%"></div>
       </div>
-      <div class="muted" style="font-size:0.78rem;margin-top:4px">Auto-scoring in <span id="review-timer-label">45</span>s</div>
     </div>
 
+    <!-- Scoreboard strip -->
+    <div id="voting-scoreboard" class="scoreboard-strip"></div>
+
+    <!-- Answer grid -->
     <div class="card card-sm">
-      <div id="review-table-wrap" class="answers-table-wrap"></div>
+      <div id="voting-grid-wrap" class="voting-grid-wrap"></div>
     </div>
 
   </div>
 </div>
 
-<!-- ── Results ──────────────────────────────────────────────── -->
+<!-- ── Results ───────────────────────────────────────────────── -->
 <div id="view-results" class="view">
-  <div class="container" style="padding-top:16px;max-width:900px">
+  <div class="container wide-container" style="padding-top:14px">
 
-    <div class="card text-center">
-      <h2 id="results-round-label">Round Complete!</h2>
-      <p class="muted mt-4">Scores updated — here's how everyone is doing.</p>
+    <div class="card text-center card-sm">
+      <h2 id="results-heading">Round Complete!</h2>
+      <div class="muted mt-4">Unique answer = <strong style="color:var(--green)">2 pts</strong> &nbsp;·&nbsp; Duplicate answer = <strong style="color:var(--yellow)">1 pt</strong></div>
     </div>
 
-    <div class="card">
-      <div class="label" style="margin-bottom:12px">Scoreboard</div>
-      <div id="results-score-list" style="display:flex;flex-direction:column;gap:8px"></div>
-    </div>
-
+    <!-- Scoreboard -->
     <div class="card card-sm">
-      <div id="results-answers-wrap"></div>
+      <div class="label mb-10">Scoreboard</div>
+      <div id="results-scoreboard" class="player-list"></div>
     </div>
 
-    <div id="results-waiting-msg" class="card text-center" style="display:none">
-      <span class="muted">Waiting for host to start next round<span class="waiting-dots"></span></span>
+    <!-- Answer breakdown table -->
+    <div class="card card-sm">
+      <div class="label mb-10">Answer Breakdown — Letter: <span id="results-letter" style="color:var(--accent);font-size:1rem;font-weight:800">A</span></div>
+      <div id="results-grid-wrap" class="voting-grid-wrap"></div>
     </div>
 
-    <button id="btn-next-round" class="btn btn-primary btn-full" style="display:none;font-size:1rem;padding:14px">
-      Next Round →
-    </button>
+    <!-- Host controls -->
+    <div id="results-host-controls" style="display:none;gap:10px;flex-wrap:wrap">
+      <button id="btn-next-round" class="btn btn-primary" style="flex:1;padding:14px">
+        Next Round →
+      </button>
+      <button id="btn-end-game" class="btn btn-ghost" style="flex:1;padding:14px">
+        End Game
+      </button>
+    </div>
+
+    <div id="results-waiting-msg" class="card text-center card-sm" style="display:none">
+      <span class="muted">Waiting for the host<span class="waiting-dots"></span></span>
+    </div>
 
   </div>
 </div>
 
-<!-- ── Game Over ─────────────────────────────────────────────── -->
+<!-- ── Game Over ──────────────────────────────────────────────── -->
 <div id="view-gameover" class="view">
-  <div class="container" style="padding-top:24px;max-width:900px">
+  <div class="container" style="padding-top:24px">
 
     <div class="card text-center">
-      <div style="font-size:3rem;margin-bottom:8px">🏆</div>
+      <div style="font-size:3.5rem;margin-bottom:8px">🏆</div>
       <h2>Game Over!</h2>
-      <p class="muted mt-4">Thanks for playing — here are the final results.</p>
+      <div class="muted mt-4" id="gameover-rounds-played"></div>
     </div>
 
     <div class="card">
-      <div class="label" style="margin-bottom:14px">Final Standings</div>
+      <div class="label mb-12">Final Standings</div>
       <div id="gameover-podium" style="display:flex;flex-direction:column;gap:10px"></div>
     </div>
-
-    <div id="gameover-answers-wrap" class="card card-sm"></div>
 
     <div id="gameover-waiting-msg" class="muted text-center" style="display:none;padding:8px">
       <span class="waiting-dots">Waiting for host</span>
@@ -243,7 +266,7 @@
   </div>
 </div>
 
-<!-- ── Toast ─────────────────────────────────────────────────── -->
+<!-- ── Toast ──────────────────────────────────────────────────── -->
 <div id="toast"></div>
 
 <script src="/socket.io/socket.io.js"></script>
