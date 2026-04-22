@@ -33,6 +33,55 @@ const DEFAULT_CATEGORIES = [
   'Cities', 'Things in a Kitchen', 'Clothing & Accessories', 'Occupations / Jobs', 'Sports',
 ];
 
+const CATEGORY_POOL = [
+  // Classic
+  'Animals', 'Countries', 'Cities', 'Foods & Drinks', 'Movies',
+  'Famous People', 'Sports', 'TV Shows', 'Books', 'Colors',
+  // Nature & science
+  'Flowers', 'Trees & Plants', 'Things in the Ocean', 'Things in Space',
+  'Types of Weather', 'Things in a Jungle', 'Insects & Bugs',
+  'Scientists & Inventors',
+  // Around the house
+  'Things in a Kitchen', 'Things in a Bedroom', 'Things in a Bathroom',
+  'Things in a Garage', 'Things you find in a Junk Drawer',
+  'Things in a Backpack',
+  // Food & drink
+  'Breakfast Foods', 'Desserts', 'Pizza Toppings', 'Cocktails & Drinks',
+  'Fast Food Items', 'Ice Cream Flavors', 'Snacks', 'Types of Pasta',
+  'Things on a BBQ',
+  // Pop culture
+  'Superheroes', 'Disney Movies', 'Disney Characters', 'Video Games',
+  'Board Games', 'Cartoon Characters', 'Song Titles', 'Band & Artist Names',
+  'Reality TV Shows', 'Game Shows', 'Villains',
+  // Fashion
+  'Clothing & Accessories', 'Types of Shoes', 'Types of Hats', 'Jewelry',
+  // Work & school
+  'Occupations / Jobs', 'Things in an Office', 'School Subjects',
+  'Things in a Hospital',
+  // Fun & silly
+  'Things that are Sticky', 'Things that Fly', 'Things that are Round',
+  'Things that are Loud', 'Things that Glow', 'Things that are Freezing Cold',
+  'Things you do when Bored', 'Excuses for Being Late',
+  'Things at a Party', 'Things at the Beach', 'Things at a Wedding',
+  'Things in a Haunted House', 'Things in a Fairy Tale',
+  // Imagination
+  'Mythical Creatures', 'Superpowers', 'Magic Spells', 'Phobias',
+  'Nicknames', 'Things from the Future', 'Things a Pirate would say',
+  // Misc
+  'Car Brands', 'Musical Instruments', 'Olympic Sports',
+  'Historical Figures', 'US States', 'Things in a Museum',
+  'Dance Styles', 'Things that are Expensive',
+];
+
+function shuffleCategories() {
+  const pool = [...CATEGORY_POOL];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, 10);
+}
+
 /* ─────────────────────────────────────────────────────────────
    Socket
 ───────────────────────────────────────────────────────────── */
@@ -673,6 +722,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   document.getElementById('setting-max-players').addEventListener('change', emitSettings);
   document.getElementById('setting-round-time').addEventListener('change', emitSettings);
+
+  // Lobby — Shuffle categories
+  document.getElementById('btn-shuffle-categories').addEventListener('click', () => {
+    renderCategoryEditor(shuffleCategories());
+    emitSettings();
+  });
 
   // Lobby — Reset categories
   document.getElementById('btn-reset-categories').addEventListener('click', () => {
