@@ -47,6 +47,7 @@ const state = {
   allAnswers: {},      // { [playerId]: { [category]: string } }
   allVotes: {},        // { [targetPid]: { [category]: [rejectorId, …] } }
   aiValidation: {},    // { [playerId]: { [category]: { valid, reason } } }
+  aiEnabled: false,
   voteTimerMax: 40,
 
   // Results
@@ -172,6 +173,7 @@ function connectSocket() {
     state.allAnswers   = {};
     state.allVotes     = {};
     state.aiValidation = {};
+    state.aiEnabled    = false;
     state.answerStatus = {};
     // Sync players list from event so scores are current going into the round
     if (info.players) state.players = info.players;
@@ -216,6 +218,8 @@ function connectSocket() {
   state.socket.on('voting-start', (data) => {
     state.allAnswers = data.answers;
     state.allVotes   = data.votes || {};
+    state.aiEnabled  = data.aiEnabled || false;
+    state.aiValidation = {};
     if (data.players) state.players = data.players;
 
     showView('voting');
@@ -541,12 +545,18 @@ function buildVotingCards(categories, answers, votes, aiValidation = {}) {
       }
 
       const aiVerdict = raw ? aiValidation[p.id]?.[cat] : null;
-      const aiBadgeHtml = aiVerdict
-        ? `<div class="ai-verdict ${aiVerdict.valid ? 'ai-verdict-valid' : 'ai-verdict-invalid'}">
-             🤖 ${aiVerdict.valid ? 'Likely valid' : 'Likely invalid'}
-           </div>
-           ${aiVerdict.reason ? `<div class="ai-verdict-reason">${esc(aiVerdict.reason)}</div>` : ''}`
-        : '';
+      let aiBadgeHtml = '';
+      if (raw) {
+        if (aiVerdict) {
+          aiBadgeHtml = `
+            <div class="ai-verdict ${aiVerdict.valid ? 'ai-verdict-valid' : 'ai-verdict-invalid'}">
+              🤖 ${aiVerdict.valid ? 'Likely valid' : 'Likely invalid'}
+            </div>
+            ${aiVerdict.reason ? `<div class="ai-verdict-reason">${esc(aiVerdict.reason)}</div>` : ''}`;
+        } else if (state.aiEnabled) {
+          aiBadgeHtml = `<div class="ai-verdict ai-verdict-loading">🤖 Analyzing…</div>`;
+        }
+      }
 
       card.innerHTML = `
         <div class="vote-player-tag">

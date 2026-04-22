@@ -256,9 +256,10 @@ Reply ONLY with valid JSON — no explanation outside the JSON:
 {"results":[{"idx":0,"valid":true,"reason":"brief reason"},…]}`;
 
   try {
+    console.log(`[AI] Validating ${toValidate.length} answers for letter "${letter}"…`);
     const response = await Promise.race([
       anthropic.messages.create({
-        model: 'claude-haiku-4-5',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         messages: [{ role: 'user', content: prompt }],
       }),
@@ -273,9 +274,10 @@ Reply ONLY with valid JSON — no explanation outside the JSON:
       if (!result[item.playerId]) result[item.playerId] = {};
       result[item.playerId][item.category] = { valid: r.valid, reason: r.reason };
     }
+    console.log(`[AI] Validation complete — ${json.results.length} verdicts.`);
     return result;
   } catch (e) {
-    console.error('AI validation error:', e.message);
+    console.error('[AI] Validation error:', e.message);
     return {};
   }
 }
@@ -294,6 +296,7 @@ function endRound(room) {
     categories: room.round.categories,
     voteTime: VOTE_TIME,
     players: room.players.map(p => ({ id: p.id, name: p.name, animal: p.animal, score: p.score })),
+    aiEnabled: !!anthropic,
   });
 
   let voteTimeLeft = VOTE_TIME;
