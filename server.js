@@ -6,7 +6,11 @@ const os = require('os');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  // Allow WebSocket upgrade behind reverse proxies (Render, Railway, etc.)
+  transports: ['websocket', 'polling'],
+  cors: { origin: '*' },
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 

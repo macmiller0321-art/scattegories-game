@@ -20,7 +20,7 @@ const state = {
 
 /* ── Socket setup ───────────────────────────────────────────── */
 function connectSocket() {
-  state.socket = io();
+  state.socket = io({ transports: ['websocket', 'polling'] });
 
   state.socket.on('room-created', ({ roomCode, playerId }) => {
     state.roomCode = roomCode;
