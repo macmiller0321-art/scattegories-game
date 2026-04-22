@@ -644,8 +644,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const code = document.getElementById('lobby-room-code').textContent;
     navigator.clipboard.writeText(code)
       .then(() => showToast('Room code copied!'))
-      .catch(() => showToast(code));  // fallback: just show it
+      .catch(() => showToast(code));
   });
+
+  // Lobby — Copy link
+  document.getElementById('btn-copy-link').addEventListener('click', () => {
+    const code = document.getElementById('lobby-room-code').textContent;
+    const link = `${location.origin}/?code=${code}`;
+    navigator.clipboard.writeText(link)
+      .then(() => showToast('Join link copied!'))
+      .catch(() => showToast(link));
+  });
+
+  // Auto-fill room code if arriving via a share link (?code=XXXXX)
+  const codeParam = new URLSearchParams(location.search).get('code');
+  if (codeParam) {
+    document.getElementById('home-code').value = codeParam.toUpperCase();
+    document.getElementById('home-name').focus();
+  }
 
   // Lobby — Settings
   function emitSettings() {
