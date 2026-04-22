@@ -76,6 +76,14 @@
             <option value="10" selected>10 players</option>
           </select>
         </div>
+        <div style="flex:1">
+          <div class="label mb-6">Round duration</div>
+          <select id="setting-round-time" class="input">
+            <option value="60">60 seconds</option>
+            <option value="75" selected>75 seconds</option>
+            <option value="90">90 seconds</option>
+          </select>
+        </div>
       </div>
 
       <div class="label mb-8">
@@ -88,6 +96,7 @@
     <!-- Non-host: waiting + category preview -->
     <div id="lobby-waiting-panel" class="card text-center" style="display:none">
       <div class="muted">Waiting for the host to start the game<span class="waiting-dots"></span></div>
+      <div id="lobby-round-time-preview" class="muted" style="margin-top:8px;display:none"></div>
       <div id="lobby-category-preview" style="margin-top:14px;display:none">
         <div class="label mb-8">Categories this round</div>
         <div id="lobby-category-list" class="category-preview-list"></div>

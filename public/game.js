@@ -224,9 +224,15 @@ function renderLobby(room) {
 
   if (isHost) {
     document.getElementById('setting-max-players').value = room.maxPlayers;
+    document.getElementById('setting-round-time').value = room.roundTime || 75;
     renderCategoryEditor(room.categories);
   } else {
-    // Show category preview for non-host players
+    // Show round time and category preview for non-host players
+    const rtEl = document.getElementById('lobby-round-time-preview');
+    if (rtEl && room.roundTime) {
+      rtEl.textContent = `Round duration: ${room.roundTime} seconds`;
+      rtEl.style.display = 'block';
+    }
     const previewSection = document.getElementById('lobby-category-preview');
     const previewList = document.getElementById('lobby-category-list');
     if (room.categories && room.categories.length) {
@@ -642,20 +648,20 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Lobby — Settings
-  document.getElementById('setting-max-players').addEventListener('change', () => {
+  function emitSettings() {
     state.socket.emit('update-settings', {
       maxPlayers: parseInt(document.getElementById('setting-max-players').value),
+      roundTime: parseInt(document.getElementById('setting-round-time').value),
       categories: getEditorCategories(),
     });
-  });
+  }
+  document.getElementById('setting-max-players').addEventListener('change', emitSettings);
+  document.getElementById('setting-round-time').addEventListener('change', emitSettings);
 
   // Lobby — Reset categories
   document.getElementById('btn-reset-categories').addEventListener('click', () => {
     renderCategoryEditor(DEFAULT_CATEGORIES);
-    state.socket.emit('update-settings', {
-      maxPlayers: parseInt(document.getElementById('setting-max-players').value),
-      categories: [...DEFAULT_CATEGORIES],
-    });
+    emitSettings();
   });
 
   // Lobby — Start game

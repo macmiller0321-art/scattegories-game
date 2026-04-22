@@ -82,6 +82,7 @@ function publicRoom(room) {
     host: room.host,
     state: room.state,
     maxPlayers: room.maxPlayers,
+    roundTime: room.roundTime,
     categories: room.categories,
     currentRound: room.currentRound,
   };
@@ -178,7 +179,7 @@ function startRound(room) {
         totalRounds: MAX_ROUNDS,
         letter,
         categories: room.round.categories,
-        timeLimit: ROUND_TIME,
+        timeLimit: room.roundTime,
         players: room.players.map(p => ({ id: p.id, name: p.name, animal: p.animal, score: p.score })),
       });
       startRoundTimer(room);
@@ -187,7 +188,7 @@ function startRound(room) {
 }
 
 function startRoundTimer(room) {
-  room.round.timeLeft = ROUND_TIME;
+  room.round.timeLeft = room.roundTime;
   room.timers.round = setInterval(() => {
     room.round.timeLeft--;
     io.to(room.code).emit('timer', { timeLeft: room.round.timeLeft });
@@ -283,6 +284,7 @@ io.on('connection', (socket) => {
       players: [{ id: socket.id, name, animal, score: 0, connected: true }],
       state: 'lobby',
       maxPlayers: 10,
+      roundTime: 75,
       categories: [...DEFAULT_CATEGORIES],
       currentRound: 0,
       usedLetters: [],
@@ -327,12 +329,15 @@ io.on('connection', (socket) => {
     io.to(code).emit('room-updated', publicRoom(room));
   });
 
-  socket.on('update-settings', ({ maxPlayers, categories }) => {
+  socket.on('update-settings', ({ maxPlayers, roundTime, categories }) => {
     const room = rooms.get(socket.roomCode);
     if (!room || room.host !== socket.id || room.state !== 'lobby') return;
 
     if (Number.isInteger(maxPlayers) && maxPlayers >= 2 && maxPlayers <= 10) {
       room.maxPlayers = maxPlayers;
+    }
+    if ([60, 75, 90].includes(roundTime)) {
+      room.roundTime = roundTime;
     }
     if (Array.isArray(categories) && categories.length === 10) {
       room.categories = categories.map(c => (c || '').trim().slice(0, 60) || 'Category');
@@ -423,6 +428,7 @@ io.on('connection', (socket) => {
     room.usedLetters = [];
     room.letterPool = shuffleArray(LETTERS);
     room.round = null;
+    room.roundTime = 75;
     room.categories = [...DEFAULT_CATEGORIES];
     room.state = 'lobby';
     io.to(room.code).emit('room-updated', publicRoom(room));
