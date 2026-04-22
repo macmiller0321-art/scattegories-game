@@ -31,7 +31,7 @@ const ANIMALS = [
   { name: 'Shark',     emoji: '🦈' },
   { name: 'Dragon',    emoji: '🐲' },
   { name: 'Unicorn',   emoji: '🦄' },
-  { name: 'Otter',     emoji: '🦦' },
+  { name: 'Raccoon',   emoji: '🦝' },
   { name: 'Hedgehog',  emoji: '🦔' },
   { name: 'Butterfly', emoji: '🦋' },
 ];
