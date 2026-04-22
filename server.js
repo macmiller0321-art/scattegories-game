@@ -343,7 +343,8 @@ io.on('connection', (socket) => {
 
   socket.on('submit-answers', ({ answers }) => {
     const room = rooms.get(socket.roomCode);
-    if (!room || (room.state !== 'playing' && room.state !== 'collecting')) return;
+    // Accept answers during playing, collecting, or even early voting (race-condition safety)
+    if (!room || !['playing', 'collecting', 'voting'].includes(room.state)) return;
 
     room.round.answers[socket.id] = answers;
     room.round.submitted.add(socket.id);

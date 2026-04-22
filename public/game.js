@@ -347,7 +347,7 @@ function renderVoting({ answers, votes, letter, categories, voteTime, players })
 
   const wrap = document.getElementById('voting-grid-wrap');
   wrap.innerHTML = '';
-  wrap.appendChild(buildAnswerGrid(categories, answers, votes, false));
+  wrap.appendChild(buildVotingCards(categories, answers, votes));
 }
 
 function refreshVoteGrid() {
@@ -355,11 +355,10 @@ function refreshVoteGrid() {
   const wrap = document.getElementById('voting-grid-wrap');
   if (!wrap) return;
   wrap.innerHTML = '';
-  wrap.appendChild(buildAnswerGrid(
+  wrap.appendChild(buildVotingCards(
     state.roundInfo.categories,
     state.allAnswers,
     state.allVotes,
-    false
   ));
 }
 
@@ -384,110 +383,144 @@ function updateVoteTimer(timeLeft) {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Answer grid builder  (shared by voting + results)
+   Voting cards  — category sections with side-by-side answer cards
 ───────────────────────────────────────────────────────────── */
-function buildAnswerGrid(categories, answers, votes, showResults) {
-  // Only show connected players (or players who answered)
+function buildVotingCards(categories, answers, votes) {
+  // Include every connected player plus anyone whose answers arrived
   const players = state.players.filter(p => p.connected || answers[p.id]);
 
-  const table = document.createElement('table');
-  table.className = 'answers-grid';
-
-  // ── Header row ──────────────────────────────────────────────
-  const thead = table.createTHead();
-  const hrow  = thead.insertRow();
-
-  const catTh = document.createElement('th');
-  catTh.textContent = 'Category';
-  hrow.appendChild(catTh);
-
-  players.forEach(p => {
-    const th = document.createElement('th');
-    th.innerHTML = `
-      <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-        <span style="font-size:1.4rem">${p.animal.emoji}</span>
-        <span style="font-weight:700">${esc(p.name)}</span>
-        ${p.id === state.playerId ? '<span class="badge-you" style="font-size:0.6rem">You</span>' : ''}
-      </div>`;
-    hrow.appendChild(th);
-  });
-
-  // ── Data rows ───────────────────────────────────────────────
-  const tbody = table.createTBody();
+  const frag = document.createDocumentFragment();
 
   for (const cat of categories) {
-    const tr = tbody.insertRow();
+    const section = document.createElement('div');
+    section.className = 'vote-section';
 
-    const catTd = tr.insertCell();
-    catTd.textContent = cat;
+    section.innerHTML = `
+      <div class="vote-section-header">
+        <span class="vote-section-name">${esc(cat)}</span>
+        <span class="vote-section-letter">Letter: ${esc(state.roundInfo?.letter ?? '')}</span>
+      </div>`;
+
+    const row = document.createElement('div');
+    row.className = 'vote-answers-row';
 
     for (const p of players) {
-      const td = tr.insertCell();
-      const raw = (answers[p.id]?.[cat] || '').trim();
+      const raw      = (answers[p.id]?.[cat] || '').trim();
+      const isOwn    = p.id === state.playerId;
+      const rejectors = votes[p.id]?.[cat] || [];
+      const others   = players.filter(x => x.id !== p.id);
+      const majorityRejected = others.length > 0 && rejectors.length > others.length / 2;
+      const iChallenged = rejectors.includes(state.playerId);
 
-      if (showResults) {
-        // Results: show coloured status chip
-        const status = state.answerStatus[p.id]?.[cat] || 'empty';
-        const ptLabel = status === 'unique' ? '2 pts'
-                      : status === 'duplicate' ? '1 pt' : null;
-        td.innerHTML = `
-          <div class="answer-cell">
-            <span class="answer-text">${raw ? esc(raw) : '<span class="answer-empty">—</span>'}</span>
-            <span class="status-chip status-${status}">
-              ${statusIcon(status)} ${statusLabel(status, ptLabel)}
-            </span>
-          </div>`;
+      const card = document.createElement('div');
+      card.className = [
+        'vote-answer-card',
+        isOwn ? 'is-own' : '',
+        majorityRejected ? 'is-challenged-majority' : '',
+      ].filter(Boolean).join(' ');
+
+      let actionHtml = '';
+      if (isOwn) {
+        actionHtml = `<span class="vote-own-label">Your answer</span>`;
+      } else if (raw) {
+        actionHtml = `
+          <button class="vote-toggle-btn ${iChallenged ? 'vote-challenged' : 'vote-accepted'}"
+            data-pid="${p.id}" data-cat="${esc(cat)}">
+            ${iChallenged ? '❌ Challenged' : '✅ Looks good'}
+          </button>
+          ${rejectors.length > 0
+            ? `<div class="vote-challenge-count">${rejectors.length} player${rejectors.length !== 1 ? 's' : ''} challenged</div>`
+            : ''}`;
       } else {
-        // Voting: show answer + reject button (for other players only)
-        const rejectors = votes[p.id]?.[cat] || [];
-        const others = state.players.filter(x => x.connected && x.id !== p.id);
-        const rejected = others.length > 0 && rejectors.length > others.length / 2;
-        const iRejected = rejectors.includes(state.playerId);
-
-        let voteHtml = '';
-        if (raw && p.id !== state.playerId) {
-          voteHtml = `
-            <button class="vote-reject-btn ${iRejected ? 'active' : ''}"
-              data-pid="${p.id}" data-cat="${esc(cat)}">
-              👎 ${iRejected ? 'Rejected' : 'Reject'}
-            </button>
-            ${rejectors.length > 0
-              ? `<span class="vote-count-label">${rejectors.length} rejection${rejectors.length !== 1 ? 's' : ''}</span>`
-              : ''}`;
-        }
-
-        td.innerHTML = `
-          <div class="answer-cell ${rejected ? 'answer-rejected' : ''}">
-            <span class="answer-text ${rejected ? 'status-voted-invalid' : ''}">
-              ${raw ? esc(raw) : '<span class="answer-empty">—</span>'}
-            </span>
-            ${voteHtml}
-          </div>`;
+        actionHtml = `<span class="vote-own-label">No answer</span>`;
       }
+
+      card.innerHTML = `
+        <div class="vote-player-tag">
+          <span class="vote-player-emoji">${p.animal.emoji}</span>
+          <span>${esc(p.name)}${isOwn ? ' (you)' : ''}</span>
+        </div>
+        <div class="vote-answer-text ${!raw ? 'is-empty' : ''} ${majorityRejected && raw ? 'is-strikethrough' : ''}">
+          ${raw ? esc(raw) : '—'}
+        </div>
+        ${actionHtml}
+      `;
+
+      row.appendChild(card);
     }
+
+    section.appendChild(row);
+    frag.appendChild(section);
   }
 
-  // Attach vote button listeners
-  if (!showResults) {
-    table.querySelectorAll('.vote-reject-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.socket.emit('cast-vote', {
-          targetPlayerId: btn.dataset.pid,
-          category: btn.dataset.cat,
-        });
+  // Attach toggle listeners after building the fragment
+  frag.querySelectorAll('.vote-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.socket.emit('cast-vote', {
+        targetPlayerId: btn.dataset.pid,
+        category: btn.dataset.cat,
       });
     });
+  });
+
+  return frag;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Results cards  — same layout, vote buttons replaced by status badges
+───────────────────────────────────────────────────────────── */
+function buildResultsCards(categories, answers, answerStatus) {
+  const players = state.players.filter(p => p.connected || answers[p.id]);
+
+  const BADGE = {
+    unique:        { cls: 'badge-unique',        icon: '✓', text: 'Unique — 2 pts' },
+    duplicate:     { cls: 'badge-duplicate',      icon: '⟳', text: 'Duplicate — 1 pt' },
+    'voted-invalid':{ cls: 'badge-voted-invalid', icon: '✗', text: 'Challenged — 0 pts' },
+    'wrong-letter':{ cls: 'badge-wrong-letter',   icon: '✗', text: 'Wrong letter — 0 pts' },
+    empty:         { cls: 'badge-empty',          icon: '—', text: 'No answer' },
+  };
+
+  const frag = document.createDocumentFragment();
+
+  for (const cat of categories) {
+    const section = document.createElement('div');
+    section.className = 'vote-section';
+    section.innerHTML = `
+      <div class="vote-section-header">
+        <span class="vote-section-name">${esc(cat)}</span>
+      </div>`;
+
+    const row = document.createElement('div');
+    row.className = 'vote-answers-row';
+
+    for (const p of players) {
+      const raw    = (answers[p.id]?.[cat] || '').trim();
+      const status = answerStatus[p.id]?.[cat] || 'empty';
+      const badge  = BADGE[status] || BADGE.empty;
+      const isOwn  = p.id === state.playerId;
+
+      const card = document.createElement('div');
+      card.className = `vote-answer-card result-${status}`;
+
+      card.innerHTML = `
+        <div class="vote-player-tag">
+          <span class="vote-player-emoji">${p.animal.emoji}</span>
+          <span>${esc(p.name)}${isOwn ? ' (you)' : ''}</span>
+        </div>
+        <div class="vote-answer-text ${!raw ? 'is-empty' : ''} ${status === 'voted-invalid' || status === 'wrong-letter' ? 'is-strikethrough' : ''}">
+          ${raw ? esc(raw) : '—'}
+        </div>
+        <div class="result-status-badge ${badge.cls}">${badge.icon} ${badge.text}</div>
+      `;
+
+      row.appendChild(card);
+    }
+
+    section.appendChild(row);
+    frag.appendChild(section);
   }
 
-  return table;
-}
-
-function statusIcon(status) {
-  return { unique: '✓', duplicate: '⟳', 'voted-invalid': '✗', 'wrong-letter': '✗', empty: '—' }[status] || '';
-}
-function statusLabel(status, ptLabel) {
-  if (ptLabel) return ptLabel;
-  return { 'voted-invalid': 'rejected', 'wrong-letter': 'wrong letter', empty: 'no answer' }[status] || status;
+  return frag;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -518,7 +551,7 @@ function renderResults({ pointsThisRound, answerStatus, answers, letter, categor
   // Answer breakdown
   const wrap = document.getElementById('results-grid-wrap');
   wrap.innerHTML = '';
-  wrap.appendChild(buildAnswerGrid(categories, answers, {}, true));
+  wrap.appendChild(buildResultsCards(categories, answers, answerStatus));
 
   // Host controls
   const isHost = state.host === state.playerId;
