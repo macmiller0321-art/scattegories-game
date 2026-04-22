@@ -450,6 +450,25 @@ select.input { cursor: pointer; }
   font-style: italic;
 }
 
+/* ── AI verdict badge ─────────────────────────────────────── */
+.ai-verdict {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.7rem; font-weight: 700; padding: 3px 8px;
+  border-radius: 5px; width: fit-content; margin-top: 2px;
+}
+.ai-verdict-valid {
+  background: rgba(67,233,123,0.1); color: var(--green);
+  border: 1px solid rgba(67,233,123,0.3);
+}
+.ai-verdict-invalid {
+  background: rgba(255,107,107,0.1); color: var(--red);
+  border: 1px solid rgba(255,107,107,0.3);
+}
+.ai-verdict-reason {
+  font-size: 0.65rem; color: var(--muted);
+  font-style: italic; margin-top: 1px;
+}
+
 /* ── Result status badge ──────────────────────────────────── */
 .result-status-badge {
   display: inline-flex;

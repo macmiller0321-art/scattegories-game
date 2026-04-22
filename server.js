@@ -4,6 +4,17 @@ const { Server } = require('socket.io');
 const path = require('path');
 const os = require('os');
 
+let anthropic = null;
+try {
+  const Anthropic = require('@anthropic-ai/sdk');
+  if (process.env.ANTHROPIC_API_KEY) {
+    anthropic = new Anthropic();
+    console.log('AI answer validation enabled.');
+  }
+} catch (_) {
+  console.warn('Anthropic SDK not found — AI validation disabled.');
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -224,11 +235,57 @@ function startRoundTimer(room) {
   }, 1000);
 }
 
+async function validateAnswersWithAI(round) {
+  if (!anthropic) return {};
+  const { answers, categories, letter } = round;
+
+  const toValidate = [];
+  for (const [playerId, playerAnswers] of Object.entries(answers)) {
+    for (const category of categories) {
+      const answer = (playerAnswers?.[category] || '').trim();
+      if (answer) toValidate.push({ idx: toValidate.length, playerId, category, answer });
+    }
+  }
+  if (toValidate.length === 0) return {};
+
+  const prompt = `You are a Scattergories judge. The letter this round is "${letter}".
+For each answer below, decide: (1) does it start with "${letter}" (ignoring leading articles like "a", "an", "the"), AND (2) is it a valid, real example of the category?
+${toValidate.map(v => `[${v.idx}] Category: "${v.category}" | Answer: "${v.answer}"`).join('\n')}
+Reply ONLY with valid JSON — no explanation outside the JSON:
+{"results":[{"idx":0,"valid":true,"reason":"brief reason"},…]}`;
+
+  try {
+    const response = await Promise.race([
+      anthropic.messages.create({
+        model: 'claude-haiku-4-5',
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+    ]);
+    const text = response.content[0].text;
+    const json = JSON.parse(text.match(/\{[\s\S]*\}/)[0]);
+    const result = {};
+    for (const r of json.results) {
+      const item = toValidate[r.idx];
+      if (!item) continue;
+      if (!result[item.playerId]) result[item.playerId] = {};
+      result[item.playerId][item.category] = { valid: r.valid, reason: r.reason };
+    }
+    return result;
+  } catch (e) {
+    console.error('AI validation error:', e.message);
+    return {};
+  }
+}
+
 function endRound(room) {
   if (room.state !== 'playing' && room.state !== 'collecting') return;
   clearTimers(room);
 
   room.state = 'voting';
+
+  // Send voting-start immediately so clients see the voting screen right away
   io.to(room.code).emit('voting-start', {
     answers: room.round.answers,
     votes: room.round.votes,
@@ -250,6 +307,13 @@ function endRound(room) {
   room.timers.voteTimeout = setTimeout(() => {
     if (room.state === 'voting') finalizeVoting(room);
   }, VOTE_TIME * 1000);
+
+  // AI validation runs async — pushes results to clients when ready
+  validateAnswersWithAI(room.round).then(aiValidation => {
+    if (room.state === 'voting' && Object.keys(aiValidation).length > 0) {
+      io.to(room.code).emit('ai-validation-ready', { aiValidation });
+    }
+  });
 }
 
 function finalizeVoting(room) {

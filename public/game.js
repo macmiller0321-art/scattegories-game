@@ -44,8 +44,9 @@ const state = {
   submitted: false,
 
   // Voting
-  allAnswers: {},    // { [playerId]: { [category]: string } }
-  allVotes: {},      // { [targetPid]: { [category]: [rejectorId, …] } }
+  allAnswers: {},      // { [playerId]: { [category]: string } }
+  allVotes: {},        // { [targetPid]: { [category]: [rejectorId, …] } }
+  aiValidation: {},    // { [playerId]: { [category]: { valid, reason } } }
   voteTimerMax: 40,
 
   // Results
@@ -165,11 +166,12 @@ function connectSocket() {
 
   // ── Round start ────────────────────────────────────────────
   state.socket.on('round-start', (info) => {
-    state.roundInfo  = info;
-    state.answers    = {};
-    state.submitted  = false;
-    state.allAnswers = {};
-    state.allVotes   = {};
+    state.roundInfo    = info;
+    state.answers      = {};
+    state.submitted    = false;
+    state.allAnswers   = {};
+    state.allVotes     = {};
+    state.aiValidation = {};
     state.answerStatus = {};
     // Sync players list from event so scores are current going into the round
     if (info.players) state.players = info.players;
@@ -225,6 +227,11 @@ function connectSocket() {
 
   state.socket.on('votes-updated', ({ votes }) => {
     state.allVotes = votes;
+    refreshVoteGrid();
+  });
+
+  state.socket.on('ai-validation-ready', ({ aiValidation }) => {
+    state.aiValidation = aiValidation;
     refreshVoteGrid();
   });
 
@@ -444,7 +451,7 @@ function renderVoting({ answers, votes, letter, categories, voteTime, players })
 
   const wrap = document.getElementById('voting-grid-wrap');
   wrap.innerHTML = '';
-  wrap.appendChild(buildVotingCards(categories, answers, votes));
+  wrap.appendChild(buildVotingCards(categories, answers, votes, state.aiValidation));
 }
 
 function refreshVoteGrid() {
@@ -456,6 +463,7 @@ function refreshVoteGrid() {
     state.roundInfo.categories,
     state.allAnswers,
     state.allVotes,
+    state.aiValidation,
   ));
 }
 
@@ -482,7 +490,7 @@ function updateVoteTimer(timeLeft) {
 /* ─────────────────────────────────────────────────────────────
    Voting cards  — category sections with side-by-side answer cards
 ───────────────────────────────────────────────────────────── */
-function buildVotingCards(categories, answers, votes) {
+function buildVotingCards(categories, answers, votes, aiValidation = {}) {
   // Include every connected player plus anyone whose answers arrived
   const players = state.players.filter(p => p.connected || answers[p.id]);
 
@@ -532,6 +540,14 @@ function buildVotingCards(categories, answers, votes) {
         actionHtml = `<span class="vote-own-label">No answer</span>`;
       }
 
+      const aiVerdict = raw ? aiValidation[p.id]?.[cat] : null;
+      const aiBadgeHtml = aiVerdict
+        ? `<div class="ai-verdict ${aiVerdict.valid ? 'ai-verdict-valid' : 'ai-verdict-invalid'}">
+             🤖 ${aiVerdict.valid ? 'Likely valid' : 'Likely invalid'}
+           </div>
+           ${aiVerdict.reason ? `<div class="ai-verdict-reason">${esc(aiVerdict.reason)}</div>` : ''}`
+        : '';
+
       card.innerHTML = `
         <div class="vote-player-tag">
           <span class="vote-player-emoji">${p.animal.emoji}</span>
@@ -541,6 +557,7 @@ function buildVotingCards(categories, answers, votes) {
           ${raw ? esc(raw) : '—'}
         </div>
         ${actionHtml}
+        ${aiBadgeHtml}
       `;
 
       row.appendChild(card);
