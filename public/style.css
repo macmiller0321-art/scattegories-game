@@ -143,6 +143,30 @@ select.input { cursor: pointer; }
   color: var(--accent); font-family: 'Courier New', monospace;
 }
 
+/* ── Animal picker (home screen) ─────────────────────────── */
+.animal-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+@media (max-width: 400px) { .animal-picker-grid { grid-template-columns: repeat(4, 1fr); } }
+
+.animal-pick-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; padding: 10px 4px;
+  background: var(--surface2); border: 2px solid var(--border);
+  border-radius: 10px; cursor: pointer; color: var(--text);
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.animal-pick-btn:hover { border-color: var(--border-bright); transform: translateY(-2px); }
+.animal-pick-btn.selected {
+  border-color: var(--accent);
+  background: rgba(108,99,255,0.12);
+}
+.animal-pick-emoji { font-size: 1.8rem; line-height: 1; }
+.animal-pick-name  { font-size: 0.6rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+.animal-pick-btn.selected .animal-pick-name { color: var(--accent-light); }
+
 /* ── Animal avatar ────────────────────────────────────────── */
 .animal-avatar {
   display: flex; flex-direction: column; align-items: center;

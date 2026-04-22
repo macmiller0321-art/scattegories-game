@@ -14,16 +14,26 @@ const io = new Server(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 
 const ANIMALS = [
-  { name: 'Fox',      emoji: '🦊' },
-  { name: 'Panda',    emoji: '🐼' },
-  { name: 'Lion',     emoji: '🦁' },
-  { name: 'Owl',      emoji: '🦉' },
-  { name: 'Penguin',  emoji: '🐧' },
-  { name: 'Tiger',    emoji: '🐯' },
-  { name: 'Bear',     emoji: '🐻' },
-  { name: 'Wolf',     emoji: '🐺' },
-  { name: 'Rabbit',   emoji: '🐰' },
-  { name: 'Koala',    emoji: '🐨' },
+  { name: 'Fox',       emoji: '🦊' },
+  { name: 'Panda',     emoji: '🐼' },
+  { name: 'Lion',      emoji: '🦁' },
+  { name: 'Owl',       emoji: '🦉' },
+  { name: 'Penguin',   emoji: '🐧' },
+  { name: 'Tiger',     emoji: '🐯' },
+  { name: 'Bear',      emoji: '🐻' },
+  { name: 'Wolf',      emoji: '🐺' },
+  { name: 'Rabbit',    emoji: '🐰' },
+  { name: 'Koala',     emoji: '🐨' },
+  { name: 'Cat',       emoji: '🐱' },
+  { name: 'Dog',       emoji: '🐶' },
+  { name: 'Frog',      emoji: '🐸' },
+  { name: 'Turtle',    emoji: '🐢' },
+  { name: 'Shark',     emoji: '🦈' },
+  { name: 'Dragon',    emoji: '🐲' },
+  { name: 'Unicorn',   emoji: '🦄' },
+  { name: 'Otter',     emoji: '🦦' },
+  { name: 'Hedgehog',  emoji: '🦔' },
+  { name: 'Butterfly', emoji: '🦋' },
 ];
 
 const DEFAULT_CATEGORIES = [
@@ -65,8 +75,12 @@ function pickLetter(room) {
   return room.letterPool.shift();
 }
 
-function assignAnimal(room) {
-  const used = new Set(room.players.map(p => p.animal.name));
+function assignAnimal(room, preferredName) {
+  const used = new Set(room.players.filter(p => p.connected).map(p => p.animal.name));
+  if (preferredName) {
+    const preferred = ANIMALS.find(a => a.name === preferredName && !used.has(a.name));
+    if (preferred) return preferred;
+  }
   return ANIMALS.find(a => !used.has(a.name)) || ANIMALS[room.players.length % ANIMALS.length];
 }
 
@@ -272,12 +286,12 @@ function endGame(room) {
 
 io.on('connection', (socket) => {
 
-  socket.on('create-room', ({ playerName }) => {
+  socket.on('create-room', ({ playerName, preferredAnimal }) => {
     const name = (playerName || '').trim().slice(0, 20);
     if (!name) return;
 
     const code = generateRoomCode();
-    const animal = ANIMALS[0];
+    const animal = ANIMALS.find(a => a.name === preferredAnimal) || ANIMALS[0];
     const room = {
       code,
       host: socket.id,
@@ -301,7 +315,7 @@ io.on('connection', (socket) => {
     socket.emit('room-updated', publicRoom(room));
   });
 
-  socket.on('join-room', ({ roomCode, playerName }) => {
+  socket.on('join-room', ({ roomCode, playerName, preferredAnimal }) => {
     const code = (roomCode || '').trim().toUpperCase();
     const name = (playerName || '').trim().slice(0, 20);
     if (!code || !name) return;
@@ -313,7 +327,7 @@ io.on('connection', (socket) => {
       socket.emit('join-error', { message: `Room is full (max ${room.maxPlayers} players).` }); return;
     }
 
-    const animal = assignAnimal(room);
+    const animal = assignAnimal(room, preferredAnimal);
     const existing = room.players.find(p => !p.connected && p.name === name);
     if (existing) {
       existing.id = socket.id;

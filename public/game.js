@@ -1,12 +1,36 @@
 /* ─────────────────────────────────────────────────────────────
    State
 ───────────────────────────────────────────────────────────── */
+const ANIMALS = [
+  { name: 'Fox',       emoji: '🦊' },
+  { name: 'Panda',     emoji: '🐼' },
+  { name: 'Lion',      emoji: '🦁' },
+  { name: 'Owl',       emoji: '🦉' },
+  { name: 'Penguin',   emoji: '🐧' },
+  { name: 'Tiger',     emoji: '🐯' },
+  { name: 'Bear',      emoji: '🐻' },
+  { name: 'Wolf',      emoji: '🐺' },
+  { name: 'Rabbit',    emoji: '🐰' },
+  { name: 'Koala',     emoji: '🐨' },
+  { name: 'Cat',       emoji: '🐱' },
+  { name: 'Dog',       emoji: '🐶' },
+  { name: 'Frog',      emoji: '🐸' },
+  { name: 'Turtle',    emoji: '🐢' },
+  { name: 'Shark',     emoji: '🦈' },
+  { name: 'Dragon',    emoji: '🐲' },
+  { name: 'Unicorn',   emoji: '🦄' },
+  { name: 'Otter',     emoji: '🦦' },
+  { name: 'Hedgehog',  emoji: '🦔' },
+  { name: 'Butterfly', emoji: '🦋' },
+];
+
 const state = {
   socket: null,
   playerId: null,
   roomCode: null,
   playerName: null,
   myAnimal: null,
+  selectedAnimal: ANIMALS[0].name,
 
   // Current room snapshot
   players: [],
@@ -236,6 +260,24 @@ function showToast(msg, isError = false) {
   t.classList.add('show');
   clearTimeout(t._t);
   t._t = setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+function renderAnimalPicker() {
+  const grid = document.getElementById('animal-picker');
+  grid.innerHTML = ANIMALS.map(a => `
+    <button class="animal-pick-btn ${a.name === state.selectedAnimal ? 'selected' : ''}"
+      data-name="${a.name}" type="button" title="${a.name}">
+      <span class="animal-pick-emoji">${a.emoji}</span>
+      <span class="animal-pick-name">${a.name}</span>
+    </button>
+  `).join('');
+  grid.querySelectorAll('.animal-pick-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.selectedAnimal = btn.dataset.name;
+      grid.querySelectorAll('.animal-pick-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    });
+  });
 }
 
 function esc(s) {
@@ -663,13 +705,14 @@ function letterColorClass(round) {
 ───────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   connectSocket();
+  renderAnimalPicker();
 
   // Home — Create
   document.getElementById('btn-create').addEventListener('click', () => {
     const name = document.getElementById('home-name').value.trim();
     if (!name) { showToast('Enter your name first!', true); return; }
     state.playerName = name;
-    state.socket.emit('create-room', { playerName: name });
+    state.socket.emit('create-room', { playerName: name, preferredAnimal: state.selectedAnimal });
   });
 
   // Home — Join
@@ -685,7 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!name) { showToast('Enter your name first!', true); return; }
     if (!code) { showToast('Enter a room code!', true); return; }
     state.playerName = name;
-    state.socket.emit('join-room', { playerName: name, roomCode: code });
+    state.socket.emit('join-room', { playerName: name, roomCode: code, preferredAnimal: state.selectedAnimal });
   }
 
   // Lobby — Copy code
