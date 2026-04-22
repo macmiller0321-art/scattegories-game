@@ -553,10 +553,24 @@ function renderResults({ pointsThisRound, answerStatus, answers, letter, categor
   wrap.innerHTML = '';
   wrap.appendChild(buildResultsCards(categories, answers, answerStatus));
 
-  // Host controls
+  // Host controls — button label/action changes on the final round
   const isHost = state.host === state.playerId;
+  const btn = document.getElementById('btn-next-round');
+  if (isLastRound) {
+    btn.textContent = 'See Final Scores 🏆';
+    btn.dataset.lastRound = 'true';
+  } else {
+    btn.textContent = 'Next Round →';
+    btn.dataset.lastRound = '';
+  }
   document.getElementById('results-host-controls').style.display = isHost ? 'flex' : 'none';
   document.getElementById('results-waiting-msg').style.display   = isHost ? 'none' : 'block';
+  const waitingText = document.getElementById('results-waiting-text');
+  if (waitingText) {
+    waitingText.innerHTML = isLastRound
+      ? 'Waiting for the host to reveal final scores<span class="waiting-dots"></span>'
+      : 'Waiting for the host to start the next round<span class="waiting-dots"></span>';
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -674,9 +688,14 @@ document.addEventListener('DOMContentLoaded', () => {
     state.socket.emit('finalize-voting');
   });
 
-  // Results — Next round
-  document.getElementById('btn-next-round').addEventListener('click', () => {
-    state.socket.emit('next-round');
+  // Results — Next round (or final scores on round 3)
+  document.getElementById('btn-next-round').addEventListener('click', (e) => {
+    const btn = e.currentTarget;
+    if (btn.dataset.lastRound) {
+      state.socket.emit('show-final-scores');
+    } else {
+      state.socket.emit('next-round');
+    }
   });
 
   // Game over — Play again

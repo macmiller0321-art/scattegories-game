@@ -230,11 +230,10 @@ function finalizeVoting(room) {
     p.score += pointsThisRound[p.id] || 0;
   }
 
-  if (room.currentRound >= MAX_ROUNDS) {
-    endGame(room);
-    return;
-  }
-
+  // Always show results so players can see their scored answers,
+  // even on the final round. isLastRound tells the client to show
+  // "See Final Scores" instead of "Next Round".
+  const isLastRound = room.currentRound >= MAX_ROUNDS;
   room.state = 'results';
   io.to(room.code).emit('round-results', {
     pointsThisRound,
@@ -245,6 +244,7 @@ function finalizeVoting(room) {
     players: room.players.map(p => ({ id: p.id, name: p.name, animal: p.animal, score: p.score })),
     currentRound: room.currentRound,
     totalRounds: MAX_ROUNDS,
+    isLastRound,
   });
 }
 
@@ -389,6 +389,12 @@ io.on('connection', (socket) => {
     const room = rooms.get(socket.roomCode);
     if (!room || room.host !== socket.id || room.state !== 'results') return;
     startRound(room);
+  });
+
+  socket.on('show-final-scores', () => {
+    const room = rooms.get(socket.roomCode);
+    if (!room || room.host !== socket.id || room.state !== 'results') return;
+    endGame(room);
   });
 
   socket.on('play-again', () => {
