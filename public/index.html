@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scattergories</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<!-- ── Home ────────────────────────────────────────────────── -->
+<div id="view-home" class="view active">
+  <div class="container" style="justify-content:center;padding-top:40px">
+    <div class="logo">
+      <h1>Scattergories</h1>
+      <p class="tagline">Multiplayer • Real-time • Free</p>
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:10px">Your name</div>
+      <input id="home-name" class="input normal-case" type="text" placeholder="Enter your name…" maxlength="20" autocomplete="off" />
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom:14px">Create a new game</h3>
+      <button id="btn-create" class="btn btn-primary btn-full">Create Room</button>
+    </div>
+
+    <div class="divider">or join an existing game</div>
+
+    <div class="card">
+      <h3 style="margin-bottom:14px">Join a game</h3>
+      <div class="input-group">
+        <input id="home-code" class="input" type="text" placeholder="ENTER CODE" maxlength="5" autocomplete="off" />
+        <button id="btn-join" class="btn btn-ghost">Join</button>
+      </div>
+    </div>
+
+    <p class="muted text-center" style="padding-bottom:24px">
+      Share the room code with friends on your network to play together.
+    </p>
+  </div>
+</div>
+
+<!-- ── Lobby ────────────────────────────────────────────────── -->
+<div id="view-lobby" class="view">
+  <div class="container" style="padding-top:24px">
+    <div class="card">
+      <div class="label" style="margin-bottom:8px">Room Code — share with friends!</div>
+      <div class="room-code-display">
+        <span class="room-code-big" id="lobby-room-code">-----</span>
+        <button id="btn-copy-code" class="btn btn-ghost btn-sm">Copy</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:12px">Players</div>
+      <div id="lobby-player-list" class="player-list"></div>
+    </div>
+
+    <!-- Host settings -->
+    <div id="lobby-settings" class="card" style="display:none;flex-direction:column;gap:14px">
+      <h3>Game Settings</h3>
+      <div class="row" style="gap:12px">
+        <div style="flex:1">
+          <div class="label" style="margin-bottom:6px">Rounds</div>
+          <select id="setting-rounds" class="input">
+            <option value="2">2 rounds</option>
+            <option value="3" selected>3 rounds</option>
+            <option value="4">4 rounds</option>
+            <option value="5">5 rounds</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <div class="label" style="margin-bottom:6px">Time per round</div>
+          <select id="setting-time" class="input">
+            <option value="60">1 minute</option>
+            <option value="90">1½ minutes</option>
+            <option value="120" selected>2 minutes</option>
+            <option value="180">3 minutes</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Non-host waiting message -->
+    <div id="lobby-waiting-msg" class="card text-center" style="display:none">
+      <span class="muted">Waiting for the host to start the game<span class="waiting-dots"></span></span>
+    </div>
+
+    <button id="btn-start" class="btn btn-success btn-full" style="display:none;font-size:1.1rem;padding:16px">
+      Start Game
+    </button>
+  </div>
+</div>
+
+<!-- ── Countdown ────────────────────────────────────────────── -->
+<div id="view-countdown" class="view" style="justify-content:center;text-align:center">
+  <div>
+    <div class="label" id="countdown-meta" style="margin-bottom:24px;font-size:1rem">Get ready…</div>
+    <div class="countdown-number" id="countdown-number">3</div>
+    <div class="countdown-label">Starting in…</div>
+  </div>
+</div>
+
+<!-- ── Playing ──────────────────────────────────────────────── -->
+<div id="view-playing" class="view">
+  <div class="container" style="padding-top:16px">
+
+    <!-- Header: letter + round info + timer -->
+    <div class="card card-sm">
+      <div class="playing-header">
+        <div id="letter-badge" class="letter-badge letter-colors-0">A</div>
+        <div class="playing-meta">
+          <div class="label" id="playing-round-label">Round 1 of 3</div>
+          <div style="color:var(--muted);font-size:0.85rem;margin-top:2px">Fill in a word for each category starting with the letter!</div>
+        </div>
+      </div>
+      <div class="timer-wrap" style="margin-top:14px">
+        <div class="timer-bar-outer">
+          <div id="timer-bar" class="timer-bar-inner timer-green" style="width:100%"></div>
+        </div>
+        <div id="timer-text" class="timer-text timer-green">120</div>
+      </div>
+    </div>
+
+    <!-- Category grid (answer inputs) -->
+    <div id="playing-form">
+      <div class="card">
+        <div id="category-grid" class="category-grid"></div>
+        <button id="btn-submit-answers" class="btn btn-success btn-full" style="margin-top:18px">
+          Submit Answers Early
+        </button>
+      </div>
+    </div>
+
+    <!-- After submission -->
+    <div id="playing-submitted" style="display:none">
+      <div class="card text-center">
+        <div class="submission-status">
+          <div class="big-check">✅</div>
+          <div style="font-weight:700;font-size:1.1rem">Answers Submitted!</div>
+          <div id="submission-waiting" class="muted mt-8">Waiting for other players…</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Reviewing ────────────────────────────────────────────── -->
+<div id="view-reviewing" class="view">
+  <div class="container" style="padding-top:16px;max-width:900px">
+
+    <div class="card card-sm">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2>Review Round — Letter: <span id="review-letter" style="color:var(--accent)">A</span></h2>
+          <div class="muted mt-4">Challenge any answer that doesn't start with the letter or seems invalid. Majority rules!</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div id="review-waiting-msg" class="muted" style="display:none">
+            <span class="waiting-dots">Waiting for host</span>
+          </div>
+          <button id="review-finalize-btn" class="btn btn-success btn-sm" style="display:none">
+            Finalize &amp; Score
+          </button>
+        </div>
+      </div>
+      <!-- Review timer bar -->
+      <div style="margin-top:12px;background:var(--surface2);border-radius:99px;height:4px;overflow:hidden">
+        <div id="review-timer-bar" class="review-timer-bar" style="width:100%"></div>
+      </div>
+      <div class="muted" style="font-size:0.78rem;margin-top:4px">Auto-scoring in <span id="review-timer-label">45</span>s</div>
+    </div>
+
+    <div class="card card-sm">
+      <div id="review-table-wrap" class="answers-table-wrap"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Results ──────────────────────────────────────────────── -->
+<div id="view-results" class="view">
+  <div class="container" style="padding-top:16px;max-width:900px">
+
+    <div class="card text-center">
+      <h2 id="results-round-label">Round Complete!</h2>
+      <p class="muted mt-4">Scores updated — here's how everyone is doing.</p>
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:12px">Scoreboard</div>
+      <div id="results-score-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+    <div class="card card-sm">
+      <div id="results-answers-wrap"></div>
+    </div>
+
+    <div id="results-waiting-msg" class="card text-center" style="display:none">
+      <span class="muted">Waiting for host to start next round<span class="waiting-dots"></span></span>
+    </div>
+
+    <button id="btn-next-round" class="btn btn-primary btn-full" style="display:none;font-size:1rem;padding:14px">
+      Next Round →
+    </button>
+
+  </div>
+</div>
+
+<!-- ── Game Over ─────────────────────────────────────────────── -->
+<div id="view-gameover" class="view">
+  <div class="container" style="padding-top:24px;max-width:900px">
+
+    <div class="card text-center">
+      <div style="font-size:3rem;margin-bottom:8px">🏆</div>
+      <h2>Game Over!</h2>
+      <p class="muted mt-4">Thanks for playing — here are the final results.</p>
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:14px">Final Standings</div>
+      <div id="gameover-podium" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+
+    <div id="gameover-answers-wrap" class="card card-sm"></div>
+
+    <div id="gameover-waiting-msg" class="muted text-center" style="display:none;padding:8px">
+      <span class="waiting-dots">Waiting for host</span>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button id="btn-play-again" class="btn btn-primary" style="display:none;flex:1;padding:14px">
+        Play Again
+      </button>
+      <button class="btn btn-ghost" style="flex:1;padding:14px" onclick="location.reload()">
+        Leave Game
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Toast ─────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/game.js"></script>
+</body>
+</html>
