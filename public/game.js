@@ -64,7 +64,7 @@ const CATEGORY_POOL = [
   // Food & drink (specific)
   'Pizza Toppings', 'Ice Cream Flavors', 'Cocktails & Drinks', 'Breakfast Foods',
   'Desserts', 'Types of Pasta', 'Things on a BBQ', 'Rejected Candy Flavors',
-  'Things you'd find in a Witch's Cauldron', 'Snacks you eat in secret',
+  'Things Found in a Witch Cauldron', 'Snacks you Eat in Secret',
 
   // Pop culture & media
   'Disney Characters', 'Cartoon Villains', 'Song Titles', 'Band & Artist Names',
@@ -74,49 +74,49 @@ const CATEGORY_POOL = [
   // Imagination & fantasy
   'Mythical Creatures', 'Superpowers', 'Magic Spells', 'Phobias',
   'Things from the Future', 'Things a Pirate would say', 'Professions in a Fantasy World',
-  'Things a Wizard would keep in their Pocket', 'Things you'd find in a Dragon's Hoard',
+  'Things a Wizard keeps in their Pocket', 'Things in a Dragon Hoard',
   'Things found in an Abandoned Theme Park', 'Names for a Haunted Place',
   'Terrible Superhero Powers',
 
   // Horror & weird
-  'Things in a Haunted House', 'Signs you're in a Horror Movie',
+  'Things in a Haunted House', 'Signs you are in a Horror Movie',
   'Things that would be Terrifying if Sentient', 'Things that Exist at 3am',
-  'Things a Ghost would be Annoyed About', 'Creatures that Shouldn't Exist but Do',
-  'Things you'd find in a Doomsday Bunker', 'Things that are Cursed',
+  'Things a Ghost would be Annoyed About', 'Creatures that Should Not Exist but Do',
+  'Things in a Doomsday Bunker', 'Things that are Cursed',
 
   // Silly & relatable
   'Excuses for Being Late', 'Things you find in a Junk Drawer',
-  'Things you find Under a Couch Cushion', 'Things at the Bottom of a Purse',
-  'Things you'd find Under the Bed', 'Things you Apologize For',
-  'Things you can't Explain to your Grandparents', 'Reasons to Fake being Sick',
+  'Things Under a Couch Cushion', 'Things at the Bottom of a Purse',
+  'Things Under the Bed', 'Things you Apologize For',
+  'Things Hard to Explain to Grandparents', 'Reasons to Fake being Sick',
   'Things you Regret Googling', 'Reasons a Dog would be Disappointed in You',
   'Things a Toddler would use as a Weapon', 'Things that are Weirdly Satisfying',
   'Things that Smell Weird but Good', 'Things that Glow',
-  'Things that are Overrated', 'Things that Feel Illegal but Aren't',
-  'Things that Shouldn't be Competitive but Are',
+  'Things that are Overrated', 'Things that Feel Illegal but Are Not',
+  'Things that are Surprisingly Competitive',
 
   // Social & awkward
   'Red Flags on a First Date', 'Worst Gifts to Receive',
-  'Things you shouldn't bring to a First Date', 'Bad Job Interview Answers',
-  'Things said at Thanksgiving Dinner', 'Things always in the Background of Zoom Calls',
-  'Things you'd Whisper in a Library', 'Reasons to Start a Group Chat',
+  'Things Not to Bring on a First Date', 'Bad Job Interview Answers',
+  'Things said at Thanksgiving Dinner', 'Things in the Background of Zoom Calls',
+  'Things to Whisper in a Library', 'Reasons to Start a Group Chat',
   'Questionable Life Advice', 'Things that go Viral on the Internet',
 
   // Adventure & objects
-  'Things you'd Bring to a Deserted Island', 'Things you'd find on a Pirate Ship',
-  'Things found at the Bottom of the Ocean', 'Things you'd find in a Time Capsule',
-  'Things you'd name a Boat', 'Things a Time Traveler would be Confused By',
-  'Things a Sea Captain would say', 'Things found in a Detective's Pocket',
+  'Things to Bring to a Deserted Island', 'Things on a Pirate Ship',
+  'Things found at the Bottom of the Ocean', 'Things in a Time Capsule',
+  'Names for a Boat', 'Things a Time Traveler would be Confused By',
+  'Things a Sea Captain would say', 'Things in a Detective Coat Pocket',
   'Things a Villain would Monologue About', 'Things that come in Pairs',
 
   // Party & events
   'Things at a Party', 'Things at the Beach', 'Things at a Wedding',
-  'Things at a Yard Sale', 'Things you'd find in a Treasure Chest',
+  'Things at a Yard Sale', 'Things in a Treasure Chest',
 
   // Misc gems
   'Things in a Fairy Tale', 'Nicknames', 'Things in Space',
   'Things in the Ocean', 'Things in a Backpack', 'Things that are Sticky',
-  'Things that make you feel Fancy', 'Things you'd find in a Witch's Cauldron',
+  'Things that make you feel Fancy', 'Things in a Witch Cauldron',
   'Worst Reality TV Show ideas', 'Things a Millennial says',
 ];
 
