@@ -62,7 +62,7 @@ const DEFAULT_CATEGORIES = [
 // A–Z excluding Q, U, X, Y, Z
 const LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','R','S','T','V','W'];
 const ROUND_TIME = 75;
-const VOTE_TIME  = 40;
+const VOTE_TIME  = 75;
 const MAX_ROUNDS = 3;
 const COLLECT_MS = 1500; // grace period after timer to flush typed answers
 
