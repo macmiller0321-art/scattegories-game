@@ -55,48 +55,69 @@ const state = {
 };
 
 const DEFAULT_CATEGORIES = [
-  'Animals', 'Countries', 'Foods & Drinks', 'Movies', 'Famous People',
-  'Cities', 'Things in a Kitchen', 'Clothing & Accessories', 'Occupations / Jobs', 'Sports',
+  'Things in a Haunted House', 'Excuses for Being Late', 'Mythical Creatures',
+  'Things that are Weirdly Satisfying', 'Phobias', 'Superpowers',
+  'Things you find in a Junk Drawer', 'Villains', 'Pizza Toppings', 'Things a Pirate would say',
 ];
 
 const CATEGORY_POOL = [
-  // Classic
-  'Animals', 'Countries', 'Cities', 'Foods & Drinks', 'Movies',
-  'Famous People', 'Sports', 'TV Shows', 'Books', 'Colors',
-  // Nature & science
-  'Flowers', 'Trees & Plants', 'Things in the Ocean', 'Things in Space',
-  'Types of Weather', 'Things in a Jungle', 'Insects & Bugs',
-  'Scientists & Inventors',
-  // Around the house
-  'Things in a Kitchen', 'Things in a Bedroom', 'Things in a Bathroom',
-  'Things in a Garage', 'Things you find in a Junk Drawer',
-  'Things in a Backpack',
-  // Food & drink
-  'Breakfast Foods', 'Desserts', 'Pizza Toppings', 'Cocktails & Drinks',
-  'Fast Food Items', 'Ice Cream Flavors', 'Snacks', 'Types of Pasta',
-  'Things on a BBQ',
-  // Pop culture
-  'Superheroes', 'Disney Movies', 'Disney Characters', 'Video Games',
-  'Board Games', 'Cartoon Characters', 'Song Titles', 'Band & Artist Names',
-  'Reality TV Shows', 'Game Shows', 'Villains',
-  // Fashion
-  'Clothing & Accessories', 'Types of Shoes', 'Types of Hats', 'Jewelry',
-  // Work & school
-  'Occupations / Jobs', 'Things in an Office', 'School Subjects',
-  'Things in a Hospital',
-  // Fun & silly
-  'Things that are Sticky', 'Things that Fly', 'Things that are Round',
-  'Things that are Loud', 'Things that Glow', 'Things that are Freezing Cold',
-  'Things you do when Bored', 'Excuses for Being Late',
-  'Things at a Party', 'Things at the Beach', 'Things at a Wedding',
-  'Things in a Haunted House', 'Things in a Fairy Tale',
-  // Imagination
+  // Food & drink (specific)
+  'Pizza Toppings', 'Ice Cream Flavors', 'Cocktails & Drinks', 'Breakfast Foods',
+  'Desserts', 'Types of Pasta', 'Things on a BBQ', 'Rejected Candy Flavors',
+  'Things you'd find in a Witch's Cauldron', 'Snacks you eat in secret',
+
+  // Pop culture & media
+  'Disney Characters', 'Cartoon Villains', 'Song Titles', 'Band & Artist Names',
+  'Video Games', 'Board Games', 'Reality TV Shows', 'Cartoon Characters',
+  'Superheroes', 'Villains', 'Things in a Video Game Tutorial',
+
+  // Imagination & fantasy
   'Mythical Creatures', 'Superpowers', 'Magic Spells', 'Phobias',
-  'Nicknames', 'Things from the Future', 'Things a Pirate would say',
-  // Misc
-  'Car Brands', 'Musical Instruments', 'Olympic Sports',
-  'Historical Figures', 'US States', 'Things in a Museum',
-  'Dance Styles', 'Things that are Expensive',
+  'Things from the Future', 'Things a Pirate would say', 'Professions in a Fantasy World',
+  'Things a Wizard would keep in their Pocket', 'Things you'd find in a Dragon's Hoard',
+  'Things found in an Abandoned Theme Park', 'Names for a Haunted Place',
+  'Terrible Superhero Powers',
+
+  // Horror & weird
+  'Things in a Haunted House', 'Signs you're in a Horror Movie',
+  'Things that would be Terrifying if Sentient', 'Things that Exist at 3am',
+  'Things a Ghost would be Annoyed About', 'Creatures that Shouldn't Exist but Do',
+  'Things you'd find in a Doomsday Bunker', 'Things that are Cursed',
+
+  // Silly & relatable
+  'Excuses for Being Late', 'Things you find in a Junk Drawer',
+  'Things you find Under a Couch Cushion', 'Things at the Bottom of a Purse',
+  'Things you'd find Under the Bed', 'Things you Apologize For',
+  'Things you can't Explain to your Grandparents', 'Reasons to Fake being Sick',
+  'Things you Regret Googling', 'Reasons a Dog would be Disappointed in You',
+  'Things a Toddler would use as a Weapon', 'Things that are Weirdly Satisfying',
+  'Things that Smell Weird but Good', 'Things that Glow',
+  'Things that are Overrated', 'Things that Feel Illegal but Aren't',
+  'Things that Shouldn't be Competitive but Are',
+
+  // Social & awkward
+  'Red Flags on a First Date', 'Worst Gifts to Receive',
+  'Things you shouldn't bring to a First Date', 'Bad Job Interview Answers',
+  'Things said at Thanksgiving Dinner', 'Things always in the Background of Zoom Calls',
+  'Things you'd Whisper in a Library', 'Reasons to Start a Group Chat',
+  'Questionable Life Advice', 'Things that go Viral on the Internet',
+
+  // Adventure & objects
+  'Things you'd Bring to a Deserted Island', 'Things you'd find on a Pirate Ship',
+  'Things found at the Bottom of the Ocean', 'Things you'd find in a Time Capsule',
+  'Things you'd name a Boat', 'Things a Time Traveler would be Confused By',
+  'Things a Sea Captain would say', 'Things found in a Detective's Pocket',
+  'Things a Villain would Monologue About', 'Things that come in Pairs',
+
+  // Party & events
+  'Things at a Party', 'Things at the Beach', 'Things at a Wedding',
+  'Things at a Yard Sale', 'Things you'd find in a Treasure Chest',
+
+  // Misc gems
+  'Things in a Fairy Tale', 'Nicknames', 'Things in Space',
+  'Things in the Ocean', 'Things in a Backpack', 'Things that are Sticky',
+  'Things that make you feel Fancy', 'Things you'd find in a Witch's Cauldron',
+  'Worst Reality TV Show ideas', 'Things a Millennial says',
 ];
 
 function shuffleCategories() {
