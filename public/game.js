@@ -788,9 +788,20 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Lobby — Copy link
-  document.getElementById('btn-copy-link').addEventListener('click', () => {
+  document.getElementById('btn-copy-link').addEventListener('click', async () => {
     const code = document.getElementById('lobby-room-code').textContent;
-    const link = `${location.origin}/?code=${code}`;
+
+    // When the host opened via localhost, swap in the LAN IP so the link
+    // actually works for other people on the network.
+    let base = location.origin;
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      try {
+        const info = await fetch('/api/server-info').then(r => r.json());
+        if (info.networkUrl) base = info.networkUrl;
+      } catch (_) {}
+    }
+
+    const link = `${base}/?code=${code}`;
     navigator.clipboard.writeText(link)
       .then(() => showToast('Join link copied!'))
       .catch(() => showToast(link));

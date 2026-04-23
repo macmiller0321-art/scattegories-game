@@ -562,16 +562,31 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🎲 Scattergories server running!\n`);
-  console.log(`  Local:   http://localhost:${PORT}`);
+
+// Discover the best shareable URL for this machine
+function getNetworkUrl(port) {
   const nets = os.networkInterfaces();
   for (const ifaces of Object.values(nets)) {
     for (const iface of ifaces) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        console.log(`  Network: http://${iface.address}:${PORT}`);
+        return `http://${iface.address}:${port}`;
       }
     }
   }
+  return null;
+}
+
+// Exposed so the browser can build a working share link even when
+// the host opened the game via localhost
+app.get('/api/server-info', (req, res) => {
+  const networkUrl = getNetworkUrl(PORT);
+  res.json({ networkUrl });
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n🎲 Scattergories server running!\n`);
+  console.log(`  Local:   http://localhost:${PORT}`);
+  const networkUrl = getNetworkUrl(PORT);
+  if (networkUrl) console.log(`  Network: ${networkUrl}`);
   console.log(`\nShare that URL with players anywhere!\n`);
 });
